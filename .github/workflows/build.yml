@@ -27,6 +27,10 @@ jobs:
         with:
           flutter-version: 3.41.9
 
+      - name: Create .env
+        shell: bash
+        run: touch .env
+
       - run: flutter pub get
 
       - run: flutter build windows --release
@@ -69,6 +73,10 @@ jobs:
           if [ ! -d "linux" ]; then
             flutter create --platforms=linux .
           fi
+
+      - name: Create .env
+        shell: bash
+        run: touch .env
 
       - run: flutter pub get
       - run: flutter build linux --release
@@ -133,6 +141,10 @@ jobs:
             flutter create --platforms=macos .
           fi
 
+      - name: Create .env
+        shell: bash
+        run: touch .env
+
       - run: flutter pub get
       - run: flutter build macos --release
 
@@ -177,6 +189,10 @@ jobs:
           flutter-version: 3.41.9
           architecture: x64
 
+      - name: Create .env
+        shell: bash
+        run: touch .env
+
       - run: arch -x86_64 flutter pub get
       - run: arch -x86_64 flutter build macos --release
 
@@ -216,6 +232,10 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.41.9
+
+      - name: Create .env
+        shell: bash
+        run: touch .env
 
       - run: flutter pub get
 
