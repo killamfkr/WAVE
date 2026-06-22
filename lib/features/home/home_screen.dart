@@ -14,12 +14,14 @@ import '../../core/router/app_router.dart';
 import '../../core/storage/recently_played.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_logger.dart';
+import '../../services/app_updater_service.dart';
 import '../../widgets/content_cards.dart';
 import '../../widgets/context_menu.dart';
 import '../../widgets/inline_error.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/shimmer.dart';
 import '../../widgets/snap_horizontal_list.dart';
+import '../../widgets/update_dialog.dart';
 
 /// Home tab — 9 sections per spec:
 ///  1. Greeting + settings entry
@@ -31,11 +33,40 @@ import '../../widgets/snap_horizontal_list.dart';
 ///  7. Mixes (chart playlists alt slice)
 ///  8. Editorial picks (chart albums)
 ///  9. Recently played (full)
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkForUpdates();
+    });
+  }
+
+  Future<void> _checkForUpdates() async {
+    try {
+      final updater = AppUpdaterService();
+      final updateInfo = await updater.checkForUpdates();
+      if (updateInfo.updateAvailable && mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: !updateInfo.isMandatory,
+          builder: (context) => UpdateDialog(updateInfo: updateInfo),
+        );
+      }
+    } catch (e) {
+      AppLogger.e('Failed to check for updates on startup', e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = AppThemeScope.of(context);
     return ColoredBox(
       color: theme.background,
