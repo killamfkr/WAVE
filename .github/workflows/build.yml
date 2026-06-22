@@ -10,29 +10,25 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
-env:
-  FLUTTER_CHANNEL: stable
-
 # ═══════════════════════════════════════════════════════════════════════════════
 jobs:
 
   # ─── Windows ──────────────────────────────────────────────────────────────
   windows:
-    name:  Windows (Installer)
+    name: Windows (Installer)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.41.9
+          flutter-version: '3.41.9'
 
-      - name: Create .env
+      - name: Create .env from secret
         shell: bash
-        run: touch .env
+        run: echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
 
       - run: flutter pub get
-
       - run: flutter build windows --release
 
       - name: Install Inno Setup
@@ -51,14 +47,14 @@ jobs:
 
   # ─── Linux x64 ───────────────────────────────────────────────────────────
   linux-x64:
-    name:  Linux x64 (AppImage)
+    name: Linux x64 (AppImage)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.41.9
+          flutter-version: '3.41.9'
 
       - name: Install Linux build dependencies
         run: |
@@ -74,17 +70,14 @@ jobs:
             flutter create --platforms=linux .
           fi
 
-      - name: Create .env
-        shell: bash
-        run: touch .env
+      - name: Create .env from secret
+        run: echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
 
       - run: flutter pub get
       - run: flutter build linux --release
 
       - name: Test Launching Linux App
         run: |
-          # Use xvfb to provide a dummy display server.
-          # timeout 10 will kill the app after 10s. If it completes timeout, it exits with code 124.
           xvfb-run --auto-servernum timeout 10 ./build/linux/x64/release/bundle/wave || if [ $? -eq 124 ]; then exit 0; else exit 1; fi
 
       - name: Package as AppImage
@@ -96,7 +89,7 @@ jobs:
           APP=WAVE.AppDir
           mkdir -p "$APP"
           cp -r build/linux/x64/release/bundle/* "$APP/"
-          
+
           if [ -f "assets/icon/icon.png" ]; then
             cp assets/icon/icon.png "$APP/WAVE.png"
           elif [ -f "icon.png" ]; then
@@ -104,7 +97,7 @@ jobs:
           else
             touch "$APP/WAVE.png"
           fi
-          
+
           cat <<EOF > "$APP/WAVE.desktop"
           [Desktop Entry]
           Name=WAVE
@@ -126,14 +119,14 @@ jobs:
 
   # ─── macOS ARM64 (Apple Silicon) ─────────────────────────────────────────
   macos-arm64:
-    name:  macOS (Apple Silicon)
+    name: macOS (Apple Silicon)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.41.9
+          flutter-version: '3.41.9'
 
       - name: Configure macOS platform files
         run: |
@@ -141,16 +134,14 @@ jobs:
             flutter create --platforms=macos .
           fi
 
-      - name: Create .env
-        shell: bash
-        run: touch .env
+      - name: Create .env from secret
+        run: echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
 
       - run: flutter pub get
       - run: flutter build macos --release
 
       - name: Test Launching macOS App
         run: |
-          # timeout 10 will kill the app after 10s. If it completes timeout, it exits with code 124.
           timeout 10 build/macos/Build/Products/Release/WAVE.app/Contents/MacOS/wave || if [ $? -eq 124 ]; then exit 0; else exit 1; fi
 
       - name: Package as DMG
@@ -159,11 +150,11 @@ jobs:
           mv wave.app WAVE.app
 
           codesign --sign - --force --deep WAVE.app
-          
+
           mkdir -p dmg_temp
           cp -R WAVE.app dmg_temp/
           ln -s /Applications dmg_temp/Applications
-          
+
           hdiutil create -volname "WAVE" -srcfolder dmg_temp -ov -format UDZO ../../../../../WAVE-macOS-arm64.dmg
           zip -ry ../../../../../WAVE-macOS-arm64.zip WAVE.app
 
@@ -176,7 +167,7 @@ jobs:
 
   # ─── macOS Intel (x86_64 via Rosetta 2) ─────────────────────────────────
   macos-intel:
-    name:  macOS (Intel)
+    name: macOS (Intel)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -186,19 +177,17 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.41.9
+          flutter-version: '3.41.9'
           architecture: x64
 
-      - name: Create .env
-        shell: bash
-        run: touch .env
+      - name: Create .env from secret
+        run: echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
 
       - run: arch -x86_64 flutter pub get
       - run: arch -x86_64 flutter build macos --release
 
       - name: Test Launching macOS Intel App
         run: |
-          # Using rosetta x86_64 emulation to launch it
           timeout 10 arch -x86_64 build/macos/Build/Products/Release/WAVE.app/Contents/MacOS/wave || if [ $? -eq 124 ]; then exit 0; else exit 1; fi
 
       - name: Package as DMG
@@ -224,27 +213,20 @@ jobs:
 
   # ─── iOS (Sideloadable IPA — no signing) ─────────────────────────────────
   ios:
-    name:  iOS (IPA)
+    name: iOS (IPA)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.41.9
+          flutter-version: '3.41.9'
 
-      - name: Create .env
-        shell: bash
-        run: touch .env
+      - name: Create .env from secret
+        run: echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
 
       - run: flutter pub get
-
       - run: flutter build ios --release --no-codesign
-
-      - name: Test Launching iOS App
-        run: |
-          echo "iOS IPA cannot be launched automatically on a macOS CI runner without a connected physical device or a specific iOS simulator build."
-          echo "We consider the successful 'flutter build ios' as a pass for this run."
 
       - name: Package as IPA
         run: |
@@ -260,7 +242,7 @@ jobs:
 
   # ─── Create GitHub Release ───────────────────────────────────────────────
   release:
-    name:  Create Release
+    name: Create Release
     needs: [windows, linux-x64, macos-arm64, macos-intel, ios]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
