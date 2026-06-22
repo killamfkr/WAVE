@@ -25,7 +25,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: ${{ env.FLUTTER_CHANNEL }}
+          flutter-version: 3.41.9
 
       - run: flutter pub get
 
@@ -54,7 +54,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: ${{ env.FLUTTER_CHANNEL }}
+          flutter-version: 3.41.9
 
       - name: Install Linux build dependencies
         run: |
@@ -125,7 +125,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: ${{ env.FLUTTER_CHANNEL }}
+          flutter-version: 3.41.9
 
       - name: Configure macOS platform files
         run: |
@@ -174,7 +174,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: ${{ env.FLUTTER_CHANNEL }}
+          flutter-version: 3.41.9
           architecture: x64
 
       - run: arch -x86_64 flutter pub get
@@ -215,7 +215,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: ${{ env.FLUTTER_CHANNEL }}
+          flutter-version: 3.41.9
 
       - run: flutter pub get
 
