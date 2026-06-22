@@ -53,10 +53,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     try {
       final updater = AppUpdaterService();
       final updateInfo = await updater.checkForUpdates();
-      if (updateInfo != null && updateInfo.updateAvailable && mounted) {
+      if (updateInfo != null && mounted) {
         showDialog(
           context: context,
-          barrierDismissible: !updateInfo.isMandatory,
           builder: (context) => UpdateDialog(updateInfo: updateInfo),
         );
       }
