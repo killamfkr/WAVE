@@ -53,7 +53,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     try {
       final updater = AppUpdaterService();
       final updateInfo = await updater.checkForUpdates();
-      if (updateInfo.updateAvailable && mounted) {
+      if (updateInfo != null && updateInfo.updateAvailable && mounted) {
         showDialog(
           context: context,
           barrierDismissible: !updateInfo.isMandatory,
@@ -61,7 +61,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         );
       }
     } catch (e) {
-      AppLogger.e('Failed to check for updates on startup', e);
+      appLogger.e('Failed to check for updates on startup', error: e);
     }
   }
 
