@@ -10,6 +10,8 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/themes.dart';
 import '../../widgets/snap_horizontal_list.dart';
 import '../../widgets/theme_morph.dart';
+import '../../services/app_updater_service.dart';
+import '../../widgets/update_dialog.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -678,55 +680,135 @@ class _EqBand extends ConsumerWidget {
 // ---------------------------------------------------------------------------
 // About --------------------------------------------------------------------
 
-class _AboutBlock extends StatelessWidget {
+class _AboutBlock extends StatefulWidget {
   const _AboutBlock();
+
+  @override
+  State<_AboutBlock> createState() => _AboutBlockState();
+}
+
+class _AboutBlockState extends State<_AboutBlock> {
+  bool _isCheckingForUpdates = false;
+
+  Future<void> _checkForUpdates(BuildContext context) async {
+    setState(() {
+      _isCheckingForUpdates = true;
+    });
+
+    try {
+      final updater = AppUpdaterService();
+      final updateInfo = await updater.checkForUpdates();
+
+      if (!context.mounted) return;
+
+      if (updateInfo != null) {
+        showDialog(
+          context: context,
+          builder: (context) => UpdateDialog(updateInfo: updateInfo),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('WAVE is up to date!'),
+            backgroundColor: AppThemeScope.of(context).accent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (context.mounted) {
+        setState(() {
+          _isCheckingForUpdates = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = AppThemeScope.of(context);
     return _Card(
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: theme.accent,
-              borderRadius:
-                  BorderRadius.circular(theme.cardRadius == 0 ? 0 : 12),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              'W',
-              style: TextStyle(
-                color: theme.background,
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: <Widget>[
-              Text(
-                'WAVE',
-                style: TextStyle(
-                  color: theme.onSurface,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.4,
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: theme.accent,
+                  borderRadius:
+                      BorderRadius.circular(theme.cardRadius == 0 ? 0 : 12),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  'W',
+                  style: TextStyle(
+                    color: theme.background,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                'v0.9.0  ·  Build 1',
-                style: TextStyle(
-                  color: theme.onSurfaceMuted,
-                  fontSize: 12,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'WAVE',
+                      style: TextStyle(
+                        color: theme.onSurface,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'v0.9.0  ·  Build 1',
+                      style: TextStyle(
+                        color: theme.onSurfaceMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isCheckingForUpdates ? null : () => _checkForUpdates(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.accent.withValues(alpha: 0.1),
+                foregroundColor: theme.accent,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(theme.cardRadius == 0 ? 4 : 8),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: _isCheckingForUpdates
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: theme.accent,
+                      ),
+                    )
+                  : const Text(
+                      'Check for Updates',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+            ),
           ),
         ],
       ),
