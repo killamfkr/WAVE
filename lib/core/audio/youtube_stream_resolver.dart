@@ -1,6 +1,5 @@
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 
-import '../../services/invidious_piped_resolver.dart';
 import '../../services/youtube_audio_extractor.dart';
 import '../api/models/deezer_track.dart';
 import '../utils/app_logger.dart';
@@ -17,13 +16,10 @@ import '../utils/app_logger.dart';
 /// Results are cached in-memory for the lifetime of the app to avoid hitting
 /// the network on every replay.
 class YoutubeStreamResolver {
-  YoutubeStreamResolver() {
-    _invidiousPiped = InvidiousPipedResolver();
-  }
+  YoutubeStreamResolver();
 
   final YoutubeExplode _yt = YoutubeExplode();
   YoutubeExplode get yt => _yt;
-  late final InvidiousPipedResolver _invidiousPiped;
 
   final Map<int, VideoId> _cache = <int, VideoId>{};
 
@@ -57,17 +53,6 @@ class YoutubeStreamResolver {
       }
     } catch (e) {
       appLogger.w('youtube_explode_dart fallback failed: $e');
-    }
-
-    // 3. Last resort: Invidious / Piped proxy instances.
-    try {
-      final res = await _invidiousPiped.resolve(track);
-      if (res != null) {
-        appLogger.i('Resolved audio URL via Invidious/Piped for ${track.title}');
-        return res;
-      }
-    } catch (e) {
-      appLogger.w('Invidious/Piped fallback failed: $e');
     }
 
     appLogger.e('All stream resolution backends failed for ${track.title}');
@@ -243,6 +228,5 @@ class YoutubeStreamResolver {
   void dispose() {
     _yt.close();
     _cache.clear();
-    _invidiousPiped.dispose();
   }
 }
