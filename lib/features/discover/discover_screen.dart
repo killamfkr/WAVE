@@ -9,7 +9,6 @@ import '../../core/api/models/deezer_album.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/content_cards.dart';
-import '../../widgets/inline_error.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/shimmer.dart';
 import '../../widgets/snap_horizontal_list.dart';
@@ -151,34 +150,36 @@ class _NewMusicTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(newReleasesProvider);
     return async.when(
-      data: (albums) => CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: <Widget>[
-          if (albums.isNotEmpty)
+      data: (albums) {
+        if (albums.isEmpty) return const SizedBox.shrink();
+        return CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: <Widget>[
             SliverToBoxAdapter(child: _Hero(album: albums.first)),
-          const SliverToBoxAdapter(
-            child: SectionHeader(title: 'Fresh drops'),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 16,
-                childAspectRatio: 0.74,
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (context, i) => AlbumCard(
-                  album: albums[i + 1],
-                  size: double.infinity,
+            const SliverToBoxAdapter(
+              child: SectionHeader(title: 'Fresh drops'),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: 0.74,
                 ),
-                childCount: albums.length - 1,
+                delegate: SliverChildBuilderDelegate(
+                  (context, i) => AlbumCard(
+                    album: albums[i + 1],
+                    size: double.infinity,
+                  ),
+                  childCount: albums.length - 1,
+                ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        );
+      },
       loading: () => ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         children: <Widget>[
@@ -199,10 +200,7 @@ class _NewMusicTab extends ConsumerWidget {
           ],
         ],
       ),
-      error: (e, _) => InlineError(
-        message: 'Could not load new music.',
-        onRetry: () => ref.invalidate(newReleasesProvider),
-      ),
+      error: (e, _) => const SizedBox.shrink(),
     );
   }
 }
@@ -326,13 +324,14 @@ class _ChartsTab extends ConsumerWidget {
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: <Widget>[
-        const SliverToBoxAdapter(child: SectionHeader(title: 'Top 50 tracks')),
-        SliverToBoxAdapter(
-          child: tracks.when(
-            data: (list) {
-              final top = list.take(50).toList();
-              return Column(
+        tracks.when(
+          data: (list) {
+            final top = list.take(50).toList();
+            if (top.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+            return SliverToBoxAdapter(
+              child: Column(
                 children: <Widget>[
+                  const SectionHeader(title: 'Top 50 tracks'),
                   for (var i = 0; i < top.length; i++)
                     TrackRow(
                       track: top[i],
@@ -341,40 +340,72 @@ class _ChartsTab extends ConsumerWidget {
                       showRank: true,
                     ),
                 ],
-              );
-            },
-            loading: () => const _LoadingRows(),
-            error: (e, _) => InlineError(
-              message: 'Could not load chart.',
-              onRetry: () => ref.invalidate(chartTracksProvider),
+              ),
+            );
+          },
+          loading: () => const SliverToBoxAdapter(
+            child: Column(
+              children: [
+                SectionHeader(title: 'Top 50 tracks'),
+                _LoadingRows(),
+              ],
             ),
           ),
+          error: (e, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
         ),
-        const SliverToBoxAdapter(child: SectionHeader(title: 'Top albums')),
-        SliverToBoxAdapter(
-          child: albums.when(
-            data: (list) => SnapHorizontalList(
-              itemCount: list.length,
-              itemExtent: 150,
-              height: 198,
-              itemBuilder: (_, i) => AlbumCard(album: list[i]),
+        albums.when(
+          data: (list) {
+            if (list.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+            return SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  const SectionHeader(title: 'Top albums'),
+                  SnapHorizontalList(
+                    itemCount: list.length,
+                    itemExtent: 150,
+                    height: 198,
+                    itemBuilder: (_, i) => AlbumCard(album: list[i]),
+                  ),
+                ],
+              ),
+            );
+          },
+          loading: () => const SliverToBoxAdapter(
+            child: Column(
+              children: [
+                SectionHeader(title: 'Top albums'),
+                SizedBox(height: 198),
+              ],
             ),
-            loading: () => const SizedBox(height: 198),
-            error: (e, _) => const SizedBox.shrink(),
           ),
+          error: (e, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
         ),
-        const SliverToBoxAdapter(child: SectionHeader(title: 'Top playlists')),
-        SliverToBoxAdapter(
-          child: lists.when(
-            data: (list) => SnapHorizontalList(
-              itemCount: list.length,
-              itemExtent: 150,
-              height: 198,
-              itemBuilder: (_, i) => PlaylistCard(playlist: list[i]),
+        lists.when(
+          data: (list) {
+            if (list.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+            return SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  const SectionHeader(title: 'Top playlists'),
+                  SnapHorizontalList(
+                    itemCount: list.length,
+                    itemExtent: 150,
+                    height: 198,
+                    itemBuilder: (_, i) => PlaylistCard(playlist: list[i]),
+                  ),
+                ],
+              ),
+            );
+          },
+          loading: () => const SliverToBoxAdapter(
+            child: Column(
+              children: [
+                SectionHeader(title: 'Top playlists'),
+                SizedBox(height: 198),
+              ],
             ),
-            loading: () => const SizedBox(height: 198),
-            error: (e, _) => const SizedBox.shrink(),
           ),
+          error: (e, _) => const SliverToBoxAdapter(child: SizedBox.shrink()),
         ),
         const SliverToBoxAdapter(child: SizedBox(height: 32)),
       ],

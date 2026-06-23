@@ -492,6 +492,15 @@ class YoutubeAudioExtractor {
         score -= 50.0;
       }
 
+      // 8D / Spatial Audio penalty
+      final targetHas8d = normSongTitle.contains('8d') || normSongTitle.contains('3d') || normSongTitle.contains('16d');
+      final candHas8d = normCandTitle.contains('8d') || normCandTitle.contains('3d') || normCandTitle.contains('16d');
+      if (candHas8d && !targetHas8d) {
+        score -= 500.0; // Heavy penalty for 8D audio if not explicitly requested
+      } else if (!candHas8d && targetHas8d) {
+        score -= 200.0;
+      }
+
       // 7. Duration difference penalty
       if (targetDuration != null && candDuration != null) {
         final diffSecs = (candDuration.inSeconds - targetDuration.inSeconds).abs();

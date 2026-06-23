@@ -17,7 +17,6 @@ import '../../core/utils/app_logger.dart';
 import '../../services/app_updater_service.dart';
 import '../../widgets/content_cards.dart';
 import '../../widgets/context_menu.dart';
-import '../../widgets/inline_error.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/shimmer.dart';
 import '../../widgets/snap_horizontal_list.dart';
@@ -248,32 +247,30 @@ class _TrendingSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(chartTracksProvider);
-    return Column(
-      children: <Widget>[
-        const SectionHeader(title: 'Trending now'),
-        async.when(
-          data: (tracks) {
-            final top = tracks.take(10).toList();
-            if (top.isEmpty) return const SizedBox.shrink();
-            return Column(
-              children: <Widget>[
-                for (var i = 0; i < top.length; i++)
-                  TrackRow(
-                    track: top[i],
-                    queue: top,
-                    indexInQueue: i,
-                    showRank: true,
-                  ),
-              ],
-            );
-          },
-          loading: () => const _RowShimmer(),
-          error: (e, _) => InlineError(
-            message: 'Could not load trending tracks.',
-            onRetry: () => ref.invalidate(chartTracksProvider),
-          ),
-        ),
-      ],
+    return async.when(
+      data: (tracks) {
+        final top = tracks.take(10).toList();
+        if (top.isEmpty) return const SizedBox.shrink();
+        return Column(
+          children: <Widget>[
+            const SectionHeader(title: 'Trending now'),
+            for (var i = 0; i < top.length; i++)
+              TrackRow(
+                track: top[i],
+                queue: top,
+                indexInQueue: i,
+                showRank: true,
+              ),
+          ],
+        );
+      },
+      loading: () => Column(
+        children: const <Widget>[
+          SectionHeader(title: 'Trending now'),
+          _RowShimmer(),
+        ],
+      ),
+      error: (e, _) => const SizedBox.shrink(),
     );
   }
 }
@@ -286,21 +283,27 @@ class _MadeForYouSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(madeForYouAlbumsProvider);
-    return Column(
-      children: <Widget>[
-        const SectionHeader(title: 'Made for you'),
-        async.when(
-          data: (albums) => _CoverRow<DeezerAlbum>(
-            items: albums.take(12).toList(),
-            builder: (a) => AlbumCard(album: a),
-          ),
-          loading: () => const _CoverRowShimmer(),
-          error: (e, _) => InlineError(
-            message: 'Could not load personalized albums.',
-            onRetry: () => ref.invalidate(madeForYouAlbumsProvider),
-          ),
-        ),
-      ],
+    return async.when(
+      data: (albums) {
+        final top = albums.take(12).toList();
+        if (top.isEmpty) return const SizedBox.shrink();
+        return Column(
+          children: <Widget>[
+            const SectionHeader(title: 'Made for you'),
+            _CoverRow<DeezerAlbum>(
+              items: top,
+              builder: (a) => AlbumCard(album: a),
+            ),
+          ],
+        );
+      },
+      loading: () => Column(
+        children: const <Widget>[
+          SectionHeader(title: 'Made for you'),
+          _CoverRowShimmer(),
+        ],
+      ),
+      error: (e, _) => const SizedBox.shrink(),
     );
   }
 }
@@ -313,21 +316,27 @@ class _NewReleasesSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(newReleasesProvider);
-    return Column(
-      children: <Widget>[
-        const SectionHeader(title: 'New releases'),
-        async.when(
-          data: (albums) => _CoverRow<DeezerAlbum>(
-            items: albums.take(12).toList(),
-            builder: (a) => AlbumCard(album: a),
-          ),
-          loading: () => const _CoverRowShimmer(),
-          error: (e, _) => InlineError(
-            message: 'Could not load new releases.',
-            onRetry: () => ref.invalidate(newReleasesProvider),
-          ),
-        ),
-      ],
+    return async.when(
+      data: (albums) {
+        final top = albums.take(12).toList();
+        if (top.isEmpty) return const SizedBox.shrink();
+        return Column(
+          children: <Widget>[
+            const SectionHeader(title: 'New releases'),
+            _CoverRow<DeezerAlbum>(
+              items: top,
+              builder: (a) => AlbumCard(album: a),
+            ),
+          ],
+        );
+      },
+      loading: () => Column(
+        children: const <Widget>[
+          SectionHeader(title: 'New releases'),
+          _CoverRowShimmer(),
+        ],
+      ),
+      error: (e, _) => const SizedBox.shrink(),
     );
   }
 }
@@ -340,22 +349,28 @@ class _TopArtistsSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(chartArtistsProvider);
-    return Column(
-      children: <Widget>[
-        const SectionHeader(title: 'Top artists'),
-        async.when(
-          data: (artists) => _CoverRow<DeezerArtist>(
-            items: artists.take(12).toList(),
-            itemSize: 110,
-            builder: (a) => ArtistCircle(artist: a),
-          ),
-          loading: () => const _CoverRowShimmer(circle: true),
-          error: (e, _) => InlineError(
-            message: 'Could not load artists.',
-            onRetry: () => ref.invalidate(chartArtistsProvider),
-          ),
-        ),
-      ],
+    return async.when(
+      data: (artists) {
+        final top = artists.take(12).toList();
+        if (top.isEmpty) return const SizedBox.shrink();
+        return Column(
+          children: <Widget>[
+            const SectionHeader(title: 'Top artists'),
+            _CoverRow<DeezerArtist>(
+              items: top,
+              itemSize: 110,
+              builder: (a) => ArtistCircle(artist: a),
+            ),
+          ],
+        );
+      },
+      loading: () => Column(
+        children: const <Widget>[
+          SectionHeader(title: 'Top artists'),
+          _CoverRowShimmer(circle: true),
+        ],
+      ),
+      error: (e, _) => const SizedBox.shrink(),
     );
   }
 }
@@ -368,27 +383,29 @@ class _MixesSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(chartPlaylistsProvider);
-    return Column(
-      children: <Widget>[
-        const SectionHeader(title: 'Mixes'),
-        async.when(
-          data: (lists) {
-            // Take a different slice so the section isn't a duplicate.
-            final mixes = lists.length > 6
-                ? lists.sublist(6, lists.length.clamp(6, 18))
-                : lists;
-            return _CoverRow<DeezerPlaylist>(
+    return async.when(
+      data: (lists) {
+        final mixes = lists.length > 6
+            ? lists.sublist(6, lists.length.clamp(6, 18))
+            : lists;
+        if (mixes.isEmpty) return const SizedBox.shrink();
+        return Column(
+          children: <Widget>[
+            const SectionHeader(title: 'Mixes'),
+            _CoverRow<DeezerPlaylist>(
               items: mixes,
               builder: (p) => PlaylistCard(playlist: p),
-            );
-          },
-          loading: () => const _CoverRowShimmer(),
-          error: (e, _) => InlineError(
-            message: 'Could not load mixes.',
-            onRetry: () => ref.invalidate(chartPlaylistsProvider),
-          ),
-        ),
-      ],
+            ),
+          ],
+        );
+      },
+      loading: () => Column(
+        children: const <Widget>[
+          SectionHeader(title: 'Mixes'),
+          _CoverRowShimmer(),
+        ],
+      ),
+      error: (e, _) => const SizedBox.shrink(),
     );
   }
 }
@@ -401,21 +418,27 @@ class _EditorialPicksSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(chartAlbumsProvider);
-    return Column(
-      children: <Widget>[
-        const SectionHeader(title: 'Editorial picks'),
-        async.when(
-          data: (albums) => _CoverRow<DeezerAlbum>(
-            items: albums.take(12).toList(),
-            builder: (a) => AlbumCard(album: a),
-          ),
-          loading: () => const _CoverRowShimmer(),
-          error: (e, _) => InlineError(
-            message: 'Could not load editorial.',
-            onRetry: () => ref.invalidate(chartAlbumsProvider),
-          ),
-        ),
-      ],
+    return async.when(
+      data: (albums) {
+        final top = albums.take(12).toList();
+        if (top.isEmpty) return const SizedBox.shrink();
+        return Column(
+          children: <Widget>[
+            const SectionHeader(title: 'Editorial picks'),
+            _CoverRow<DeezerAlbum>(
+              items: top,
+              builder: (a) => AlbumCard(album: a),
+            ),
+          ],
+        );
+      },
+      loading: () => Column(
+        children: const <Widget>[
+          SectionHeader(title: 'Editorial picks'),
+          _CoverRowShimmer(),
+        ],
+      ),
+      error: (e, _) => const SizedBox.shrink(),
     );
   }
 }
@@ -507,21 +530,27 @@ class _RecommendedTracksSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(recommendedTracksProvider);
-    return Column(
-      children: <Widget>[
-        const SectionHeader(title: 'Recommended tracks'),
-        async.when(
-          data: (tracks) => _CoverRow<DeezerTrack>(
-            items: tracks.toList(),
-            builder: (t) => TrackCard(track: t, queue: tracks),
-          ),
-          loading: () => const _CoverRowShimmer(),
-          error: (e, _) => InlineError(
-            message: 'Could not load recommendations.',
-            onRetry: () => ref.invalidate(recommendedTracksProvider),
-          ),
-        ),
-      ],
+    return async.when(
+      data: (tracks) {
+        final top = tracks.toList();
+        if (top.isEmpty) return const SizedBox.shrink();
+        return Column(
+          children: <Widget>[
+            const SectionHeader(title: 'Recommended tracks'),
+            _CoverRow<DeezerTrack>(
+              items: top,
+              builder: (t) => TrackCard(track: t, queue: top),
+            ),
+          ],
+        );
+      },
+      loading: () => Column(
+        children: const <Widget>[
+          SectionHeader(title: 'Recommended tracks'),
+          _CoverRowShimmer(),
+        ],
+      ),
+      error: (e, _) => const SizedBox.shrink(),
     );
   }
 }

@@ -1,5 +1,5 @@
+import 'dart:io' show Platform;
 import 'dart:ui';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -303,6 +303,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
                         onTap: () {
                           final id = track.artist?.id;
                           if (id != null) {
+                            context.pop();
                             context.push(AppRoutes.artistPath(id));
                           }
                         },
@@ -450,8 +451,63 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
               ),
             ],
           ),
+          if (Platform.isWindows || Platform.isLinux || Platform.isMacOS)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: _DesktopVolumeSlider(player: player),
+            ),
         ],
       ),
+    );
+  }
+}
+
+class _DesktopVolumeSlider extends ConsumerWidget {
+  const _DesktopVolumeSlider({required this.player});
+  final PlayerState player;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = AppThemeScope.of(context);
+    final isMuted = player.volume == 0;
+    return Row(
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            ref.read(playerControlsProvider).setVolume(isMuted ? 1.0 : 0.0);
+          },
+          child: Padding(
+            padding: const EdgeInsets.only(right: 12, top: 8, bottom: 8),
+            child: Icon(
+              isMuted
+                  ? PhosphorIconsFill.speakerX
+                  : player.volume < 0.5
+                      ? PhosphorIconsFill.speakerLow
+                      : PhosphorIconsFill.speakerHigh,
+              color: theme.onSurfaceMuted,
+              size: 20,
+            ),
+          ),
+        ),
+        Expanded(
+          child: SliderTheme(
+            data: SliderThemeData(
+              trackHeight: 4,
+              activeTrackColor: theme.accent,
+              inactiveTrackColor: theme.onSurface.withValues(alpha: 0.1),
+              thumbColor: theme.accent,
+              overlayColor: theme.accent.withValues(alpha: 0.15),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+            ),
+            child: Slider(
+              value: player.volume,
+              onChanged: (v) => ref.read(playerControlsProvider).setVolume(v),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

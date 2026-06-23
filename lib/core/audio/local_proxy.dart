@@ -31,9 +31,33 @@ class LocalProxy {
           final proxyRequest = http.Request('GET', uri);
           
           // Add essential headers to bypass YouTube restrictions
-          proxyRequest.headers['User-Agent'] = userAgent ?? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
-          proxyRequest.headers['Origin'] = 'https://www.youtube.com';
-          proxyRequest.headers['Referer'] = 'https://www.youtube.com/';
+          String finalUserAgent = userAgent ?? '';
+          if (finalUserAgent.isEmpty) {
+             final cClient = uri.queryParameters['c'];
+             if (cClient == 'ANDROID_VR') {
+                finalUserAgent = 'com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 14; en_US; Quest 3; Build/UQ1A.240105.004) gzip';
+             } else if (cClient == 'ANDROID') {
+                finalUserAgent = 'com.google.android.youtube/19.44.38 (Linux; U; Android 14; en_US) gzip';
+             } else if (cClient == 'IOS') {
+                finalUserAgent = 'com.google.ios.youtube/19.45.4 (iPhone17,1; U; CPU iOS 18_1 like Mac OS X)';
+             } else if (cClient == 'MWEB') {
+                finalUserAgent = 'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36';
+             } else if (cClient == 'TVHTML5_SIMPLY_EMBEDDED_PLAYER') {
+                finalUserAgent = 'Mozilla/5.0 (PlayStation; PlayStation 4/12.00) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
+             } else {
+                finalUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
+             }
+          }
+          
+          proxyRequest.headers['User-Agent'] = finalUserAgent;
+          
+          // Mobile/TV clients often fail if Origin/Referer are sent.
+          // Only send them if it's a WEB client.
+          if (uri.queryParameters['c'] == 'WEB') {
+            proxyRequest.headers['Origin'] = 'https://www.youtube.com';
+            proxyRequest.headers['Referer'] = 'https://www.youtube.com/';
+          }
+          
           proxyRequest.headers['Accept'] = '*/*';
           proxyRequest.headers['Accept-Language'] = 'en-US,en;q=0.9';
           

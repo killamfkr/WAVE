@@ -220,12 +220,14 @@ class TrackRow extends ConsumerWidget {
     required this.queue,
     required this.indexInQueue,
     this.showRank = false,
+    this.onTapOverride,
   });
 
   final DeezerTrack track;
   final List<DeezerTrack> queue;
   final int indexInQueue;
   final bool showRank;
+  final VoidCallback? onTapOverride;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -245,22 +247,23 @@ class TrackRow extends ConsumerWidget {
     );
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () async {
-        final controls = ref.read(playerControlsProvider);
-        await controls.playTracks(queue, startIndex: indexInQueue);
-        if (context.mounted) {
-          await ref.read(recentlyPlayedProvider.notifier).push(
-                RecentEntry(
-                  kind: 'track',
-                  id: track.id,
-                  title: track.title,
-                  subtitle: track.artist?.name,
-                  imageUrl: cover,
-                  atMillis: DateTime.now().millisecondsSinceEpoch,
-                ),
-              );
-        }
-      },
+      onTap: onTapOverride ??
+          () async {
+            final controls = ref.read(playerControlsProvider);
+            await controls.playTracks(queue, startIndex: indexInQueue);
+            if (context.mounted) {
+              await ref.read(recentlyPlayedProvider.notifier).push(
+                    RecentEntry(
+                      kind: 'track',
+                      id: track.id,
+                      title: track.title,
+                      subtitle: track.artist?.name,
+                      imageUrl: cover,
+                      atMillis: DateTime.now().millisecondsSinceEpoch,
+                    ),
+                  );
+            }
+          },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         child: Row(

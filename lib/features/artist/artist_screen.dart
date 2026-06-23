@@ -260,7 +260,7 @@ class _DiscographySliverGrid extends ConsumerWidget {
               crossAxisCount: 2,
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
-              childAspectRatio: 0.85,
+              childAspectRatio: 0.74,
             ),
             delegate: SliverChildBuilderDelegate(
               (context, i) => AlbumCard(album: sorted[i]),
@@ -307,7 +307,7 @@ class _RelatedSliverGrid extends ConsumerWidget {
             crossAxisCount: 3,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            childAspectRatio: 0.82,
+            childAspectRatio: 0.70,
           ),
           delegate: SliverChildBuilderDelegate(
             (context, i) => ArtistCircle(artist: artists[i]),

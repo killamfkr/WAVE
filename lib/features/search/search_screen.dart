@@ -5,6 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../core/storage/search_providers.dart';
+import '../../core/api/deezer_api_client.dart';
+import '../../core/api/lastfm_providers.dart';
+import '../../core/audio/player_providers.dart';
+import '../../core/storage/recently_played.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/content_cards.dart';
 import '../../widgets/inline_error.dart';
@@ -180,11 +184,59 @@ class _Results extends ConsumerWidget {
               const SliverToBoxAdapter(child: SectionHeader(title: 'Tracks')),
               SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (context, i) => TrackRow(
-                    track: r.tracks[i],
-                    queue: r.tracks,
-                    indexInQueue: i,
-                  ),
+                  (context, i) {
+                    final track = r.tracks[i];
+                    return TrackRow(
+                      track: track,
+                      queue: r.tracks,
+                      indexInQueue: i,
+                      onTapOverride: () async {
+                        final controls = ref.read(playerControlsProvider);
+                        await controls.playTracks([track]);
+
+                        if (context.mounted) {
+                          ref.read(recentlyPlayedProvider.notifier).push(
+                            RecentEntry(
+                              kind: 'track',
+                              id: track.id,
+                              title: track.title,
+                              subtitle: track.artist?.name,
+                              imageUrl: track.album?.coverMedium ?? track.album?.cover,
+                              atMillis: DateTime.now().millisecondsSinceEpoch,
+                            ),
+                          );
+                        }
+
+                        final artistName = track.artist?.name;
+                        if (artistName == null || artistName.isEmpty) return;
+
+                        final lastfmApi = ref.read(lastfmApiClientProvider);
+                        try {
+                          final similar = await lastfmApi.getSimilarTracks(track.title, artistName);
+                          if (similar.isEmpty) return;
+
+                          final deezerApi = ref.read(deezerApiClientProvider);
+                          int added = 0;
+                          for (final t in similar) {
+                            final tName = t['name'] ?? '';
+                            final tArtist = t['artist'] ?? '';
+                            if (tName.isEmpty || tArtist.isEmpty) continue;
+
+                            try {
+                              final searchRes = await deezerApi.searchTracks('artist:"$tArtist" track:"$tName"');
+                              if (searchRes.isNotEmpty) {
+                                await controls.addToQueueLast(searchRes.first);
+                                added++;
+                                if (added >= 15) break; // Limit related tracks
+                              }
+                            } catch (_) {}
+                          }
+                        } catch (e) {
+                          // ignore errors silently
+                        }
+                      },
+                    );
+                  },
                   childCount: r.tracks.length > 5 ? 5 : r.tracks.length,
                 ),
               ),
