@@ -11,6 +11,7 @@ import '../api/models/player_state.dart';
 import '../api/models/queue_state.dart';
 import '../utils/app_logger.dart';
 import '../storage/hive_boxes.dart';
+import 'local_proxy.dart';
 import 'music_player_service.dart';
 import 'youtube_stream_resolver.dart';
 
@@ -370,12 +371,14 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
       }
       if (url == null) throw Exception('No audio source found');
       
-      final headers = _buildStreamHeaders(userAgent: userAgent);
+      // Route YouTube urls through our local proxy
+      if (url.contains('googlevideo.com') && LocalProxy.isRunning) {
+        final encodedUrl = Uri.encodeComponent(url);
+        final encodedUa = Uri.encodeComponent(userAgent ?? '');
+        url = 'http://127.0.0.1:${LocalProxy.port}/proxy?url=$encodedUrl&ua=$encodedUa';
+      }
 
-      await fadingInPlayer.open(mk.Media(
-        url,
-        httpHeaders: headers,
-      ), play: true);
+      await fadingInPlayer.open(mk.Media(url), play: true);
       await _applyEqualizerToPlayer(fadingInPlayer);
       
       _loading = false;
@@ -472,12 +475,15 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
         );
         return;
       }
-      final headers = _buildStreamHeaders(userAgent: userAgent);
 
-      await player.open(mk.Media(
-        url,
-        httpHeaders: headers,
-      ));
+      // Route YouTube urls through our local proxy
+      if (url.contains('googlevideo.com') && LocalProxy.isRunning) {
+        final encodedUrl = Uri.encodeComponent(url);
+        final encodedUa = Uri.encodeComponent(userAgent ?? '');
+        url = 'http://127.0.0.1:${LocalProxy.port}/proxy?url=$encodedUrl&ua=$encodedUa';
+      }
+
+      await player.open(mk.Media(url));
       await _applyEqualizerToPlayer(player);
       _loading = false;
       _emitPlayer(_state.copyWith(status: PlaybackStatus.playing));

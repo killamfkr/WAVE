@@ -14,6 +14,8 @@ import 'core/storage/hive_boxes.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_notifier.dart';
 import 'core/api/deezer_api_client.dart';
+import 'core/api/lastfm_api_client.dart';
+import 'core/audio/local_proxy.dart';
 import 'widgets/theme_morph.dart';
 
 late final MediaKitMusicPlayerService _playerService;
@@ -25,8 +27,9 @@ final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load configuration and check Deezer API availability
+  // Load configuration and check API availability
   await DeezerApiClient.loadEnv();
+  await LastfmApiClient.loadEnv();
   await DeezerApiClient.checkGeoRestriction();
   
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -47,6 +50,7 @@ Future<void> main() async {
 
   MediaKit.ensureInitialized();
   await HiveBoxes.openAll();
+  await LocalProxy.start();
 
   final session = await AudioSession.instance;
   await session.configure(const AudioSessionConfiguration.music());

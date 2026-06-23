@@ -26,7 +26,10 @@ jobs:
 
       - name: Create .env from secret
         shell: bash
-        run: echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
+        run: |
+          echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" >> .env
+          echo "LASTFM_SHARED_SECRET=${{ secrets.LASTFM_SHARED_SECRET }}" >> .env
 
       - run: flutter pub get
       - run: flutter build windows --release
@@ -71,7 +74,10 @@ jobs:
           fi
 
       - name: Create .env from secret
-        run: echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
+        run: |
+          echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" >> .env
+          echo "LASTFM_SHARED_SECRET=${{ secrets.LASTFM_SHARED_SECRET }}" >> .env
 
       - run: flutter pub get
       - run: flutter build linux --release
@@ -135,7 +141,10 @@ jobs:
           fi
 
       - name: Create .env from secret
-        run: echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
+        run: |
+          echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" >> .env
+          echo "LASTFM_SHARED_SECRET=${{ secrets.LASTFM_SHARED_SECRET }}" >> .env
 
       - run: flutter pub get
       - run: flutter build macos --release
@@ -185,7 +194,10 @@ jobs:
           architecture: x64
 
       - name: Create .env from secret
-        run: echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
+        run: |
+          echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" >> .env
+          echo "LASTFM_SHARED_SECRET=${{ secrets.LASTFM_SHARED_SECRET }}" >> .env
 
       - run: arch -x86_64 flutter pub get
       - run: arch -x86_64 flutter build macos --release
@@ -231,7 +243,10 @@ jobs:
           flutter-version: '3.41.9'
 
       - name: Create .env from secret
-        run: echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
+        run: |
+          echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" >> .env
+          echo "LASTFM_SHARED_SECRET=${{ secrets.LASTFM_SHARED_SECRET }}" >> .env
 
       - run: flutter pub get
       - run: flutter build ios --release --no-codesign

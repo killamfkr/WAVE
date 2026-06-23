@@ -22,7 +22,8 @@ import '../../widgets/section_header.dart';
 import '../../widgets/shimmer.dart';
 import '../../widgets/snap_horizontal_list.dart';
 import '../../widgets/update_dialog.dart';
-
+import '../../core/api/lastfm_providers.dart';
+import '../../core/api/models/deezer_track.dart';
 /// Home tab — 9 sections per spec:
 ///  1. Greeting + settings entry
 ///  2. Quick resume strip (recently played)
@@ -81,6 +82,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const SliverToBoxAdapter(child: _MixesSection()),
           const SliverToBoxAdapter(child: _EditorialPicksSection()),
           const SliverToBoxAdapter(child: _RecentlyPlayedSection()),
+          const SliverToBoxAdapter(child: _RecommendedTracksSection()),
           const SliverToBoxAdapter(child: SizedBox(height: 32)),
         ],
       ),
@@ -491,6 +493,33 @@ class _RecentlyPlayedSection extends ConsumerWidget {
               ),
             );
           },
+        ),
+      ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+class _RecommendedTracksSection extends ConsumerWidget {
+  const _RecommendedTracksSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(recommendedTracksProvider);
+    return Column(
+      children: <Widget>[
+        const SectionHeader(title: 'Recommended tracks'),
+        async.when(
+          data: (tracks) => _CoverRow<DeezerTrack>(
+            items: tracks.toList(),
+            builder: (t) => TrackCard(track: t, queue: tracks),
+          ),
+          loading: () => const _CoverRowShimmer(),
+          error: (e, _) => InlineError(
+            message: 'Could not load recommendations.',
+            onRetry: () => ref.invalidate(recommendedTracksProvider),
+          ),
         ),
       ],
     );

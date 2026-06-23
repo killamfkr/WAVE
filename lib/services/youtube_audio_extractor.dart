@@ -189,7 +189,11 @@ class YoutubeAudioExtractor {
     final queryTitle = (titleVersion != null && titleVersion.isNotEmpty)
         ? '$title $titleVersion'
         : title;
-    final searchQuery = '$queryTitle $artist lyrics'.trim();
+        
+    final isLive = queryTitle.toLowerCase().contains('live');
+    final suffix = isLive ? 'live' : 'audio';
+    
+    final searchQuery = '$queryTitle $artist $suffix'.trim();
     final cacheKey = targetDuration != null
         ? '$searchQuery|${targetDuration.inSeconds}'
         : searchQuery;
@@ -492,15 +496,15 @@ class YoutubeAudioExtractor {
       if (targetDuration != null && candDuration != null) {
         final diffSecs = (candDuration.inSeconds - targetDuration.inSeconds).abs();
         if (diffSecs <= 4) {
-          score += 50.0;
+          score += 150.0;
         } else if (diffSecs <= 10) {
-          score += 30.0;
+          score += 50.0;
         } else if (diffSecs <= 20) {
           score += 10.0;
         } else if (diffSecs <= 40) {
-          score -= (diffSecs - 20) * 1.0;
+          score -= (diffSecs * 3.0);
         } else {
-          score -= 20.0 + (diffSecs - 40) * 2.0;
+          score -= 500.0 + (diffSecs * 5.0);
         }
       }
 

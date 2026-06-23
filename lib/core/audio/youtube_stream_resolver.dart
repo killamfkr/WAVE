@@ -180,15 +180,15 @@ class YoutubeStreamResolver {
             if (targetDuration != null && candDuration != null) {
               final diffSecs = (candDuration.inSeconds - targetDuration.inSeconds).abs();
               if (diffSecs <= 4) {
-                score += 50.0;
+                score += 150.0;
               } else if (diffSecs <= 10) {
-                score += 30.0;
+                score += 50.0;
               } else if (diffSecs <= 20) {
                 score += 10.0;
               } else if (diffSecs <= 40) {
-                score -= (diffSecs - 20) * 1.0;
+                score -= (diffSecs * 3.0);
               } else {
-                score -= 20.0 + (diffSecs - 40) * 2.0;
+                score -= 500.0 + (diffSecs * 5.0);
               }
             }
 
@@ -219,10 +219,13 @@ class YoutubeStreamResolver {
   String _buildQuery(DeezerTrack track) {
     final artist = track.artist?.name ?? '';
     final version = track.titleVersion ?? '';
-    if (version.isNotEmpty) {
-      return '${track.title} $version $artist lyrics'.trim();
-    }
-    return '${track.title} $artist lyrics'.trim();
+    final title = track.title;
+    final queryTitle = version.isNotEmpty ? '$title $version' : title;
+    
+    final isLive = queryTitle.toLowerCase().contains('live');
+    final suffix = isLive ? 'live' : 'audio';
+    
+    return '$queryTitle $artist $suffix'.trim();
   }
 
   void dispose() {

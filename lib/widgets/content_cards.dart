@@ -340,3 +340,45 @@ String _fmtDuration(int? secs) {
   final s = secs % 60;
   return '$m:${s.toString().padLeft(2, '0')}';
 }
+
+/// Track card for displaying tracks in a slider.
+class TrackCard extends ConsumerWidget {
+  const TrackCard({
+    super.key,
+    required this.track,
+    required this.queue,
+    this.size = 150,
+  });
+
+  final DeezerTrack track;
+  final List<DeezerTrack> queue;
+  final double size;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cover = track.album?.coverBig ?? track.album?.coverMedium ?? track.album?.cover;
+    return CoverCard(
+      imageUrl: cover,
+      title: track.title,
+      subtitle: track.artist?.name ?? 'Track',
+      size: size,
+      onTap: () async {
+        final controls = ref.read(playerControlsProvider);
+        final indexInQueue = queue.indexOf(track);
+        await controls.playTracks(queue, startIndex: indexInQueue >= 0 ? indexInQueue : 0);
+        if (context.mounted) {
+          await ref.read(recentlyPlayedProvider.notifier).push(
+                RecentEntry(
+                  kind: 'track',
+                  id: track.id,
+                  title: track.title,
+                  subtitle: track.artist?.name,
+                  imageUrl: cover,
+                  atMillis: DateTime.now().millisecondsSinceEpoch,
+                ),
+              );
+        }
+      },
+    );
+  }
+}
