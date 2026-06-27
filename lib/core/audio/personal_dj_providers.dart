@@ -57,8 +57,10 @@ final personalDjVoiceProvider = Provider<PersonalDjVoiceService>((ref) {
 
 class PersonalDjNotifier extends Notifier<PersonalDjState> {
   Set<int> _likedIds = const <int>{};
+  Set<int> _sessionTrackIds = <int>{};
   int? _lastSpokenTrackId;
   String? _lastSpokenScript;
+  bool _refillInFlight = false;
 
   PersonalDjVoiceService get _voice => ref.read(personalDjVoiceProvider);
   MusicPlayerService get _player => ref.read(playerControlsProvider);
@@ -81,6 +83,7 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
         mood: mood,
       );
       _likedIds = session.likedTrackIds;
+      _sessionTrackIds = session.queue.map((t) => t.id).toSet();
       _lastSpokenTrackId = null;
       _lastSpokenScript = null;
 
@@ -125,6 +128,7 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
 
   void onTrackChanged(DeezerTrack? track) {
     if (!state.isActive || track == null) return;
+    _sessionTrackIds.add(track.id);
     if (track.id == _lastSpokenTrackId) return;
 
     final spoken = PersonalDjService.linerFor(
@@ -133,6 +137,31 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
       mood: state.mood,
     );
     _speak(spoken, trackId: track.id, mood: state.mood);
+  }
+
+  Future<void> maybeRefillQueue(int upcomingCount) async {
+    if (!state.isActive || _refillInFlight) return;
+    if (upcomingCount > personalDjRefillThreshold) return;
+
+    _refillInFlight = true;
+    try {
+      final more = await PersonalDjService().extendQueue(
+        liked: ref.read(likedTracksProvider),
+        recent: ref.read(recentlyPlayedProvider),
+        excludeIds: _sessionTrackIds,
+        mood: state.mood,
+      );
+      if (more.isEmpty) return;
+
+      for (final track in more) {
+        _sessionTrackIds.add(track.id);
+        await _player.addToQueueLast(track);
+      }
+    } catch (e) {
+      // Non-fatal — autoplay similar still handles an empty queue.
+    } finally {
+      _refillInFlight = false;
+    }
   }
 
   Future<void> toggleVoice() async {
@@ -182,8 +211,10 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
   Future<void> endSession() async {
     await _voice.stop();
     _likedIds = const <int>{};
+    _sessionTrackIds = <int>{};
     _lastSpokenTrackId = null;
     _lastSpokenScript = null;
+    _refillInFlight = false;
     state = const PersonalDjState();
   }
 }

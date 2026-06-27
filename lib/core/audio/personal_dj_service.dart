@@ -9,6 +9,15 @@ import 'similar_tracks_resolver.dart';
 
 enum PersonalDjMood { mixed, chill, hype, discover }
 
+/// Target length for an initial DJ session queue.
+const int personalDjQueueTarget = 50;
+
+/// When upcoming drops below this, the DJ refills the queue.
+const int personalDjRefillThreshold = 8;
+
+/// How many tracks to append per refill.
+const int personalDjRefillBatch = 24;
+
 class PersonalDjSession {
   const PersonalDjSession({
     required this.queue,
@@ -41,18 +50,26 @@ class PersonalDjService {
     PersonalDjMood mood = PersonalDjMood.mixed,
   }) async {
     final likedIds = liked.map((t) => t.id).toSet();
-    final seed = await _pickSeed(liked: liked, recent: recent);
-    final similar = await _similar.resolve(seed, excludeIds: {seed.id});
+    final seeds = await _pickSeeds(liked: liked, recent: recent, count: 6);
+    final seed = seeds.first;
+    final exclude = <int>{seed.id};
+    final tail = <DeezerTrack>[];
 
-    final tail = <DeezerTrack>[...similar];
+    await _appendFromSeeds(
+      seeds: seeds,
+      exclude: exclude,
+      into: tail,
+      target: personalDjQueueTarget - 1,
+      similarPerSeed: 12,
+    );
 
-    for (final track in liked) {
-      if (tail.length >= 19) break;
-      if (track.id == seed.id) continue;
-      if (!tail.any((t) => t.id == track.id)) {
-        tail.add(track);
-      }
-    }
+    await _appendLikedAndRecent(
+      liked: liked,
+      recent: recent,
+      exclude: exclude,
+      into: tail,
+      target: personalDjQueueTarget - 1,
+    );
 
     _applyMoodSort(tail, mood);
     if (tail.length > 1) {
@@ -76,36 +93,145 @@ class PersonalDjService {
     );
   }
 
-  Future<DeezerTrack> _pickSeed({
+  /// Adds fresh tracks for an active DJ session, skipping anything already heard
+  /// or queued in this session.
+  Future<List<DeezerTrack>> extendQueue({
     required List<DeezerTrack> liked,
     required List<RecentEntry> recent,
+    required Set<int> excludeIds,
+    PersonalDjMood mood = PersonalDjMood.mixed,
+    int target = personalDjRefillBatch,
   }) async {
-    final candidates = <DeezerTrack>[];
+    final exclude = <int>{...excludeIds};
+    final added = <DeezerTrack>[];
 
-    if (liked.isNotEmpty) {
-      candidates.add(liked[_rng.nextInt(liked.length)]);
-      if (liked.length > 1) {
-        candidates.add(liked[_rng.nextInt(liked.length)]);
+    final seeds = await _pickSeeds(
+      liked: liked,
+      recent: recent,
+      count: 4,
+      excludeIds: exclude,
+    );
+
+    await _appendFromSeeds(
+      seeds: seeds,
+      exclude: exclude,
+      into: added,
+      target: target,
+      similarPerSeed: 10,
+    );
+
+    await _appendLikedAndRecent(
+      liked: liked,
+      recent: recent,
+      exclude: exclude,
+      into: added,
+      target: target,
+    );
+
+    _applyMoodSort(added, mood);
+    if (added.length > 1) {
+      added.shuffle(_rng);
+    }
+
+    return added.take(target).toList(growable: false);
+  }
+
+  Future<void> _appendFromSeeds({
+    required List<DeezerTrack> seeds,
+    required Set<int> exclude,
+    required List<DeezerTrack> into,
+    required int target,
+    required int similarPerSeed,
+  }) async {
+    for (final seed in seeds) {
+      if (into.length >= target) return;
+      exclude.add(seed.id);
+      final similar = await _similar.resolve(
+        seed,
+        excludeIds: exclude,
+        limit: similarPerSeed,
+      );
+      for (final track in similar) {
+        if (exclude.add(track.id)) {
+          into.add(track);
+        }
+        if (into.length >= target) return;
+      }
+    }
+  }
+
+  Future<void> _appendLikedAndRecent({
+    required List<DeezerTrack> liked,
+    required List<RecentEntry> recent,
+    required Set<int> exclude,
+    required List<DeezerTrack> into,
+    required int target,
+  }) async {
+    final likedPool = List<DeezerTrack>.from(liked)..shuffle(_rng);
+    for (final track in likedPool) {
+      if (into.length >= target) return;
+      if (exclude.add(track.id)) {
+        into.add(track);
       }
     }
 
-    for (final entry in recent.where((e) => e.kind == 'track').take(6)) {
+    for (final entry in recent.where((e) => e.kind == 'track').take(16)) {
+      if (into.length >= target) return;
       try {
-        candidates.add(await _deezer.getTrack(entry.id));
+        final track = await _deezer.getTrack(entry.id);
+        if (exclude.add(track.id)) {
+          into.add(track);
+        }
+      } catch (e) {
+        appLogger.w('DJ queue: could not load recent track ${entry.id}: $e');
+      }
+    }
+  }
+
+  Future<List<DeezerTrack>> _pickSeeds({
+    required List<DeezerTrack> liked,
+    required List<RecentEntry> recent,
+    required int count,
+    Set<int> excludeIds = const <int>{},
+  }) async {
+    final seeds = <DeezerTrack>[];
+    final seen = <int>{...excludeIds};
+
+    void tryAdd(DeezerTrack track) {
+      if (seen.add(track.id)) {
+        seeds.add(track);
+      }
+    }
+
+    final likedPool = List<DeezerTrack>.from(liked)..shuffle(_rng);
+    for (final track in likedPool) {
+      tryAdd(track);
+      if (seeds.length >= count) return seeds;
+    }
+
+    for (final entry in recent.where((e) => e.kind == 'track')) {
+      if (seeds.length >= count) break;
+      try {
+        tryAdd(await _deezer.getTrack(entry.id));
       } catch (e) {
         appLogger.w('DJ seed: could not load recent track ${entry.id}: $e');
       }
     }
 
-    if (candidates.isEmpty) {
-      final chart = await _deezer.getChartTracks(limit: 15);
-      if (chart.isEmpty) {
-        throw StateError('Could not build a DJ session — no tracks available.');
+    if (seeds.isEmpty) {
+      final chart = await _deezer.getChartTracks(limit: 20);
+      final chartPool = List<DeezerTrack>.from(chart)..shuffle(_rng);
+      for (final track in chartPool) {
+        tryAdd(track);
+        if (seeds.length >= count) break;
       }
-      return chart[_rng.nextInt(chart.length)];
     }
 
-    return candidates[_rng.nextInt(candidates.length)];
+    if (seeds.isEmpty) {
+      throw StateError('Could not build a DJ session — no tracks available.');
+    }
+
+    return seeds;
   }
 
   void _applyMoodSort(
