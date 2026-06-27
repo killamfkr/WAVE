@@ -13,6 +13,7 @@ import '../utils/app_logger.dart';
 import '../storage/hive_boxes.dart';
 import 'local_proxy.dart';
 import 'music_player_service.dart';
+import 'similar_tracks_resolver.dart';
 import 'youtube_stream_resolver.dart';
 import 'android_auto_browse.dart';
 
@@ -21,8 +22,11 @@ import 'android_auto_browse.dart';
 class MediaKitMusicPlayerService extends BaseAudioHandler
     with QueueHandler, SeekHandler
     implements MusicPlayerService {
-  MediaKitMusicPlayerService({YoutubeStreamResolver? resolver})
-      : _resolver = resolver ?? YoutubeStreamResolver() {
+  MediaKitMusicPlayerService({
+    YoutubeStreamResolver? resolver,
+    SimilarTracksResolver? similarResolver,
+  })  : _resolver = resolver ?? YoutubeStreamResolver(),
+        _similarResolver = similarResolver ?? SimilarTracksResolver() {
     _initPlayer(_playerA);
     _initPlayer(_playerB);
     _loadInitialSettings();
@@ -34,6 +38,7 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
   late mk.Player _inactivePlayer = _playerB;
 
   final YoutubeStreamResolver _resolver;
+  final SimilarTracksResolver _similarResolver;
 
   final StreamController<PlayerState> _playerCtrl =
       StreamController<PlayerState>.broadcast();
@@ -51,6 +56,7 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
   List<double> _equalizerBandsDb = const <double>[0, 0, 0, 0, 0];
   int _playbackRecoveryAttempts = 0;
   static const int _maxPlaybackRecoveryAttempts = 2;
+  bool _autoplayInFlight = false;
 
   void _initPlayer(mk.Player player) {
     player.stream.playing.listen((v) => _onPlayingChanged(player, v));
@@ -71,6 +77,8 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
         if (json is Map) {
           final secs = (json['crossfadeSeconds'] as num?)?.toInt() ?? 0;
           _state = _state.copyWith(crossfadeSeconds: secs);
+          final autoplay = json['autoplaySimilar'] as bool? ?? true;
+          _state = _state.copyWith(autoplaySimilar: autoplay);
           final bandsRaw = json['equalizerBandsDb'];
           if (bandsRaw is List) {
             final List<double> bands = bandsRaw.whereType<num>().map((n) => n.toDouble()).toList();
@@ -82,6 +90,8 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
       } else if (raw is Map) {
         final secs = (raw['crossfadeSeconds'] as num?)?.toInt() ?? 0;
         _state = _state.copyWith(crossfadeSeconds: secs);
+        final autoplay = raw['autoplaySimilar'] as bool? ?? true;
+        _state = _state.copyWith(autoplaySimilar: autoplay);
         final bandsRaw = raw['equalizerBandsDb'];
         if (bandsRaw is List) {
           final List<double> bands = bandsRaw.whereType<num>().map((n) => n.toDouble()).toList();
@@ -422,6 +432,48 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
     await _startPlayback(next, autoCrossfade: false);
   }
 
+  Set<int> _queuedTrackIds() {
+    return <int>{
+      ..._queue.history.map((t) => t.id),
+      if (_queue.current != null) _queue.current!.id,
+      ..._queue.upcoming.map((t) => t.id),
+    };
+  }
+
+  Future<bool> _tryAutoplaySimilar() async {
+    if (!_state.autoplaySimilar || _state.repeat != RepeatMode.off) return false;
+    if (_autoplayInFlight) return false;
+
+    final seed = _queue.current;
+    if (seed == null) return false;
+
+    _autoplayInFlight = true;
+    _emitPlayer(_state.copyWith(status: PlaybackStatus.loading, errorMessage: null));
+
+    try {
+      final similar = await _similarResolver.resolve(
+        seed,
+        excludeIds: _queuedTrackIds(),
+      );
+      if (similar.isEmpty) return false;
+
+      final next = similar.first;
+      final rest = similar.sublist(1);
+      _emitQueue(_queue.copyWith(
+        history: <DeezerTrack>[..._queue.history, seed],
+        current: next,
+        upcoming: rest,
+      ));
+      await _startPlayback(next, autoCrossfade: false);
+      return true;
+    } catch (e, st) {
+      appLogger.e('Autoplay similar failed', error: e, stackTrace: st);
+      return false;
+    } finally {
+      _autoplayInFlight = false;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Source loading & Crossfade -----------------------------------------------
 
@@ -709,6 +761,7 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
           return;
         }
       }
+      if (await _tryAutoplaySimilar()) return;
       await stop();
       return;
     }
@@ -782,6 +835,11 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
   @override
   Future<void> setCrossfadeSeconds(int seconds) async {
     _emitPlayer(_state.copyWith(crossfadeSeconds: seconds.clamp(0, 12)));
+  }
+
+  @override
+  Future<void> setAutoplaySimilar(bool value) async {
+    _emitPlayer(_state.copyWith(autoplaySimilar: value));
   }
 
   // ---------------------------------------------------------------------------

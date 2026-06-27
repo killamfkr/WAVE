@@ -42,6 +42,10 @@ class SettingsScreen extends ConsumerWidget {
             SizedBox(height: 12),
             _CrossfadeRow(),
             SizedBox(height: 28),
+            _SectionTitle('Playback'),
+            SizedBox(height: 12),
+            _AutoplaySimilarRow(),
+            SizedBox(height: 28),
             _SectionTitle('Equalizer'),
             SizedBox(height: 12),
             _EqualizerCard(),
@@ -861,6 +865,69 @@ class _ThemeMockPainter extends CustomPainter {
 }
 
 
+
+// ---------------------------------------------------------------------------
+// Autoplay similar ---------------------------------------------------------
+
+class _AutoplaySimilarRow extends ConsumerWidget {
+  const _AutoplaySimilarRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = AppThemeScope.of(context);
+    final enabled = ref.watch(appSettingsProvider).autoplaySimilar;
+    return _Card(
+      child: InkWell(
+        onTap: () async {
+          final next = !enabled;
+          await ref.read(appSettingsProvider.notifier).setAutoplaySimilar(next);
+          await ref.read(playerControlsProvider).setAutoplaySimilar(next);
+        },
+        borderRadius: BorderRadius.circular(theme.cardRadius == 0 ? 4 : 12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Autoplay similar music',
+                      style: TextStyle(
+                        color: theme.onSurface,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'When a playlist or album ends, keep playing songs like what you were listening to. Use repeat to loop instead.',
+                      style: TextStyle(
+                        color: theme.onSurfaceMuted,
+                        fontSize: 12,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                enabled ? 'ON' : 'OFF',
+                style: TextStyle(
+                  color: enabled ? theme.accent : theme.onSurfaceMuted,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Crossfade ----------------------------------------------------------------

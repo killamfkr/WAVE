@@ -16,6 +16,7 @@ class AppSettings {
     this.audioQuality = AudioQuality.high,
     this.crossfadeSeconds = 0,
     this.equalizerBandsDb = const <double>[0, 0, 0, 0, 0],
+    this.autoplaySimilar = true,
     this.downloadOnWifiOnly = true,
     this.language = AppLanguage.english,
     this.notifyNewReleases = true,
@@ -26,6 +27,7 @@ class AppSettings {
   final AudioQuality audioQuality;
   final int crossfadeSeconds;
   final List<double> equalizerBandsDb;
+  final bool autoplaySimilar;
   final bool downloadOnWifiOnly;
   final AppLanguage language;
   final bool notifyNewReleases;
@@ -36,6 +38,7 @@ class AppSettings {
     AudioQuality? audioQuality,
     int? crossfadeSeconds,
     List<double>? equalizerBandsDb,
+    bool? autoplaySimilar,
     bool? downloadOnWifiOnly,
     AppLanguage? language,
     bool? notifyNewReleases,
@@ -46,6 +49,7 @@ class AppSettings {
       audioQuality: audioQuality ?? this.audioQuality,
       crossfadeSeconds: crossfadeSeconds ?? this.crossfadeSeconds,
       equalizerBandsDb: equalizerBandsDb ?? this.equalizerBandsDb,
+      autoplaySimilar: autoplaySimilar ?? this.autoplaySimilar,
       downloadOnWifiOnly: downloadOnWifiOnly ?? this.downloadOnWifiOnly,
       language: language ?? this.language,
       notifyNewReleases: notifyNewReleases ?? this.notifyNewReleases,
@@ -60,6 +64,7 @@ class AppSettings {
         'audioQuality': audioQuality.name,
         'crossfadeSeconds': crossfadeSeconds,
         'equalizerBandsDb': equalizerBandsDb,
+        'autoplaySimilar': autoplaySimilar,
         'downloadOnWifiOnly': downloadOnWifiOnly,
         'language': language.name,
         'notifyNewReleases': notifyNewReleases,
@@ -87,6 +92,7 @@ class AppSettings {
       crossfadeSeconds: (json['crossfadeSeconds'] as num?)?.toInt() ?? 0,
       equalizerBandsDb:
           bands.length == 5 ? bands : const <double>[0, 0, 0, 0, 0],
+      autoplaySimilar: json['autoplaySimilar'] as bool? ?? true,
       downloadOnWifiOnly: json['downloadOnWifiOnly'] as bool? ?? true,
       language: lang(json['language'] as String?),
       notifyNewReleases: json['notifyNewReleases'] as bool? ?? true,
@@ -127,6 +133,11 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
 
   Future<void> setCrossfadeSeconds(int s) async {
     state = state.copyWith(crossfadeSeconds: s.clamp(0, 12));
+    await _persist();
+  }
+
+  Future<void> setAutoplaySimilar(bool value) async {
+    state = state.copyWith(autoplaySimilar: value);
     await _persist();
   }
 

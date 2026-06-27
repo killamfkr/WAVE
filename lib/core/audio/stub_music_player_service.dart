@@ -154,6 +154,11 @@ class StubMusicPlayerService implements MusicPlayerService {
   }
 
   @override
+  Future<void> setAutoplaySimilar(bool value) async {
+    _emitPlayer(_player.copyWith(autoplaySimilar: value));
+  }
+
+  @override
   Future<void> playTracks(
     List<DeezerTrack> tracks, {
     int? startIndex,

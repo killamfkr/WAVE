@@ -13,6 +13,7 @@ import '../../core/audio/player_providers.dart';
 import '../../core/audio/sleep_timer.dart';
 import '../../core/router/app_router.dart';
 import '../../core/storage/library_providers.dart';
+import '../../core/storage/settings_providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/player/heart_like_button.dart';
 import '../../widgets/player/lyrics_view.dart';
@@ -437,6 +438,20 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
                 icon: PhosphorIconsRegular.musicNotes,
                 label: _showLyrics ? 'COVER' : 'LYRICS',
                 onTap: () => setState(() => _showLyrics = !_showLyrics),
+              ),
+              _BottomTextButton(
+                icon: PhosphorIconsRegular.infinity,
+                label: 'AUTO',
+                accent: player.autoplaySimilar,
+                onTap: () async {
+                  final enabled = !player.autoplaySimilar;
+                  await ref
+                      .read(appSettingsProvider.notifier)
+                      .setAutoplaySimilar(enabled);
+                  await ref
+                      .read(playerControlsProvider)
+                      .setAutoplaySimilar(enabled);
+                },
               ),
               _BottomTextButton(
                 icon: PhosphorIconsRegular.clockCounterClockwise,

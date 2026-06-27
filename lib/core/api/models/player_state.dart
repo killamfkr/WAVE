@@ -30,6 +30,7 @@ abstract class PlayerState with _$PlayerState {
     @Default(Duration.zero) Duration buffered,
     @Default(false) bool shuffle,
     @Default(RepeatMode.off) RepeatMode repeat,
+    @Default(true) bool autoplaySimilar,
     @Default(1.0) double volume,
     @Default(0) int crossfadeSeconds,
     @Default(Duration(milliseconds: 500)) Duration transitionDuration,

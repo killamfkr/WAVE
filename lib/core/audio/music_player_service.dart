@@ -33,6 +33,7 @@ abstract class MusicPlayerService {
   Future<void> setRepeat(RepeatMode mode);
   Future<void> setVolume(double volume);
   Future<void> setCrossfadeSeconds(int seconds);
+  Future<void> setAutoplaySimilar(bool value);
 
   // ---------------------------------------------------------------------------
   // Queue management
