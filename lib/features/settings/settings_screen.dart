@@ -8,8 +8,8 @@ import '../../core/router/app_router.dart';
 import '../../core/storage/library_providers.dart';
 import '../../core/storage/settings_providers.dart';
 import '../../core/storage/user_profile_providers.dart';
-import '../../core/sync/drive_sync_config.dart';
-import '../../core/sync/drive_sync_providers.dart';
+import '../../core/sync/cloud_sync_providers.dart';
+import '../../core/sync/supabase_sync_config.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/themes.dart';
 import '../../widgets/snap_horizontal_list.dart';
@@ -184,12 +184,12 @@ class _AccountSection extends ConsumerWidget {
     final theme = AppThemeScope.of(context);
     final profile = ref.watch(userProfileProvider);
     final playlistCount = ref.watch(userPlaylistsProvider).length;
-    final driveSync = ref.watch(driveSyncProvider);
+    final cloudSync = ref.watch(cloudSyncProvider);
     final playlistLabel = playlistCount == 1
         ? '1 saved playlist'
         : '$playlistCount saved playlists';
-    final subtitle = driveSync.isSignedIn
-        ? _syncSubtitle(driveSync)
+    final subtitle = cloudSync.isSignedIn
+        ? _syncSubtitle(cloudSync)
         : playlistLabel;
 
     return _Card(
@@ -198,17 +198,14 @@ class _AccountSection extends ConsumerWidget {
         onTap: () => _openProfileEditor(context, ref),
         child: Row(
           children: <Widget>[
-            _AccountAvatar(
-              photoUrl: driveSync.accountPhotoUrl,
-              theme: theme,
-            ),
+            _AccountAvatar(theme: theme),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    driveSync.accountName ?? profile.displayName,
+                    profile.displayName,
                     style: TextStyle(
                       color: theme.onSurface,
                       fontSize: 16,
@@ -223,10 +220,10 @@ class _AccountSection extends ConsumerWidget {
                       fontSize: 12,
                     ),
                   ),
-                  if (driveSync.accountEmail != null) ...<Widget>[
+                  if (cloudSync.accountEmail != null) ...<Widget>[
                     const SizedBox(height: 2),
                     Text(
-                      driveSync.accountEmail!,
+                      cloudSync.accountEmail!,
                       style: TextStyle(
                         color: theme.onSurfaceMuted.withValues(alpha: 0.8),
                         fontSize: 11,
@@ -256,42 +253,26 @@ class _AccountSection extends ConsumerWidget {
     );
   }
 
-  String _syncSubtitle(DriveSyncState driveSync) {
-    if (driveSync.phase == DriveSyncPhase.syncing) {
-      return 'Syncing playlists to Google Drive…';
+  String _syncSubtitle(CloudSyncState cloudSync) {
+    if (cloudSync.phase == CloudSyncPhase.syncing) {
+      return 'Syncing playlists to cloud…';
     }
-    if (driveSync.lastSyncedAt != null) {
-      final local = driveSync.lastSyncedAt!.toLocal();
+    if (cloudSync.lastSyncedAt != null) {
+      final local = cloudSync.lastSyncedAt!.toLocal();
       final time =
           '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
-      return 'Synced to hidden Drive · $time';
+      return 'Synced with PlayTorrio cloud · $time';
     }
-    return 'Signed in · hidden Google Drive sync';
+    return 'Signed in · PlayTorrio cloud sync';
   }
 }
 
 class _AccountAvatar extends StatelessWidget {
-  const _AccountAvatar({required this.photoUrl, required this.theme});
-  final String? photoUrl;
+  const _AccountAvatar({required this.theme});
   final AppTheme theme;
 
   @override
   Widget build(BuildContext context) {
-    if (photoUrl != null && photoUrl!.isNotEmpty) {
-      return ClipOval(
-        child: Image.network(
-          photoUrl!,
-          width: 56,
-          height: 56,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _fallback(),
-        ),
-      );
-    }
-    return _fallback();
-  }
-
-  Widget _fallback() {
     return Container(
       width: 56,
       height: 56,
@@ -325,31 +306,103 @@ class _EditProfileSheet extends ConsumerStatefulWidget {
 
 class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
   late final TextEditingController _nameController;
-  late final TextEditingController _emailController;
+  late final TextEditingController _authEmailController;
+  late final TextEditingController _passwordController;
+  bool _authBusy = false;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.profile.displayName);
-    _emailController = TextEditingController(text: widget.profile.email ?? '');
+    _authEmailController = TextEditingController(
+      text: widget.profile.email ?? '',
+    );
+    _passwordController = TextEditingController();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _emailController.dispose();
+    _authEmailController.dispose();
+    _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _signIn() async {
+    final email = _authEmailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.isEmpty) return;
+
+    setState(() => _authBusy = true);
+    try {
+      await ref.read(cloudSyncProvider.notifier).signIn(
+            email: email,
+            password: password,
+          );
+      _passwordController.clear();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Signed in — playlists synced to cloud'),
+            backgroundColor: AppThemeScope.of(context).accent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } on Exception catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _authBusy = false);
+    }
+  }
+
+  Future<void> _signUp() async {
+    final email = _authEmailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.length < 6) return;
+
+    setState(() => _authBusy = true);
+    try {
+      await ref.read(cloudSyncProvider.notifier).signUp(
+            email: email,
+            password: password,
+          );
+      _passwordController.clear();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Account created — playlists synced to cloud'),
+            backgroundColor: AppThemeScope.of(context).accent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } on Exception catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _authBusy = false);
+    }
   }
 
   Future<void> _save() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
-    final email = _emailController.text.trim();
     await ref.read(userProfileProvider.notifier).setDisplayName(name);
-    await ref
-        .read(userProfileProvider.notifier)
-        .setEmail(email.isEmpty ? null : email);
     await ref.read(userPlaylistsProvider.notifier).syncCreatorFromProfile();
     if (mounted) Navigator.of(context).pop();
   }
@@ -358,7 +411,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
   Widget build(BuildContext context) {
     final theme = AppThemeScope.of(context);
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-    final driveSync = ref.watch(driveSyncProvider);
+    final cloudSync = ref.watch(cloudSyncProvider);
     final playlistLabel = widget.playlistCount == 1
         ? '1 playlist saved on this device'
         : '${widget.playlistCount} playlists saved on this device';
@@ -366,8 +419,8 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
       child: DraggableScrollableSheet(
-        initialChildSize: 0.52,
-        maxChildSize: 0.85,
+        initialChildSize: cloudSync.isSignedIn ? 0.52 : 0.62,
+        maxChildSize: 0.9,
         minChildSize: 0.4,
         expand: false,
         builder: (ctx, scrollController) {
@@ -402,17 +455,17 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Sign in with Google to sync your profile and playlists to a hidden app folder in your Google Drive. No WAVE server — your data stays in your Google account.',
+                  'Use the same PlayTorrio cloud account as PlayTorrioV2 and Stories. Sign in with email and password to sync your profile and playlists.',
                   style: TextStyle(
                     color: theme.onSurfaceMuted,
                     fontSize: 13,
                     height: 1.4,
                   ),
                 ),
-                if (!DriveSyncConfig.isConfigured) ...<Widget>[
+                if (!SupabaseSyncConfig.isConfigured) ...<Widget>[
                   const SizedBox(height: 10),
                   Text(
-                    'Add GOOGLE_WEB_CLIENT_ID to .env to enable sync.',
+                    'Add PLAYTORRIO_SUPABASE_URL and PLAYTORRIO_SUPABASE_ANON_KEY to .env.',
                     style: TextStyle(
                       color: theme.accent.withValues(alpha: 0.9),
                       fontSize: 12,
@@ -420,10 +473,10 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
                     ),
                   ),
                 ],
-                if (driveSync.errorMessage != null) ...<Widget>[
+                if (cloudSync.errorMessage != null) ...<Widget>[
                   const SizedBox(height: 10),
                   Text(
-                    driveSync.errorMessage!,
+                    cloudSync.errorMessage!,
                     style: TextStyle(
                       color: theme.accent,
                       fontSize: 12,
@@ -431,18 +484,18 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
                   ),
                 ],
                 const SizedBox(height: 16),
-                if (driveSync.isSignedIn) ...<Widget>[
+                if (cloudSync.isSignedIn) ...<Widget>[
                   OutlinedButton.icon(
-                    onPressed: driveSync.phase == DriveSyncPhase.syncing
+                    onPressed: cloudSync.phase == CloudSyncPhase.syncing
                         ? null
-                        : () => ref.read(driveSyncProvider.notifier).syncNow(),
+                        : () => ref.read(cloudSyncProvider.notifier).syncNow(),
                     icon: Icon(
                       PhosphorIconsRegular.arrowsClockwise,
                       size: 18,
                       color: theme.accent,
                     ),
                     label: Text(
-                      driveSync.phase == DriveSyncPhase.syncing
+                      cloudSync.phase == CloudSyncPhase.syncing
                           ? 'Syncing…'
                           : 'Sync now',
                       style: TextStyle(
@@ -457,54 +510,123 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
                   ),
                   const SizedBox(height: 10),
                   TextButton(
-                    onPressed: () =>
-                        ref.read(driveSyncProvider.notifier).signOut(),
+                    onPressed: _authBusy
+                        ? null
+                        : () => ref.read(cloudSyncProvider.notifier).signOut(),
                     child: Text(
-                      'Sign out of Google',
+                      'Sign out',
                       style: TextStyle(color: theme.onSurfaceMuted),
                     ),
                   ),
                   const SizedBox(height: 8),
                 ] else ...<Widget>[
+                  Text(
+                    'EMAIL',
+                    style: TextStyle(
+                      color: theme.onSurfaceMuted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _authEmailController,
+                    style: TextStyle(color: theme.onSurface),
+                    keyboardType: TextInputType.emailAddress,
+                    autocorrect: false,
+                    decoration: InputDecoration(
+                      hintText: 'you@example.com',
+                      hintStyle: TextStyle(color: theme.onSurfaceMuted),
+                      filled: true,
+                      fillColor: theme.background,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'PASSWORD',
+                    style: TextStyle(
+                      color: theme.onSurfaceMuted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    style: TextStyle(color: theme.onSurface),
+                    decoration: InputDecoration(
+                      hintText: '••••••••',
+                      hintStyle: TextStyle(color: theme.onSurfaceMuted),
+                      filled: true,
+                      fillColor: theme.background,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _signIn(),
+                  ),
+                  const SizedBox(height: 14),
                   SizedBox(
                     width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: driveSync.phase == DriveSyncPhase.signingIn ||
-                              !DriveSyncConfig.isConfigured
+                    child: ElevatedButton(
+                      onPressed: _authBusy ||
+                              !SupabaseSyncConfig.isConfigured
                           ? null
-                          : () => ref.read(driveSyncProvider.notifier).signIn(),
-                      icon: driveSync.phase == DriveSyncPhase.signingIn
-                          ? SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: theme.accent,
-                              ),
-                            )
-                          : Icon(
-                              PhosphorIconsRegular.cloudArrowUp,
-                              size: 18,
-                              color: theme.onSurface,
-                            ),
-                      label: Text(
-                        driveSync.phase == DriveSyncPhase.signingIn
-                            ? 'Signing in…'
-                            : 'Continue with Google',
-                        style: TextStyle(
-                          color: theme.onSurface,
-                          fontWeight: FontWeight.w800,
+                          : _signIn,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: theme.accent,
+                        foregroundColor: theme.background,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            theme.cardRadius == 0 ? 4 : 10,
+                          ),
                         ),
                       ),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        side: BorderSide(
-                          color: theme.onSurface.withValues(alpha: 0.15),
-                        ),
+                      child: _authBusy
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: theme.background,
+                              ),
+                            )
+                          : const Text(
+                              'Sign in',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 14,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _authBusy ||
+                            !SupabaseSyncConfig.isConfigured
+                        ? null
+                        : _signUp,
+                    child: Text(
+                      'Create account',
+                      style: TextStyle(
+                        color: theme.accent,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                 ],
                 Text(
                   'DISPLAY NAME',
@@ -522,33 +644,6 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
                   style: TextStyle(color: theme.onSurface),
                   decoration: InputDecoration(
                     hintText: LocalUserProfile.defaultDisplayName,
-                    hintStyle: TextStyle(color: theme.onSurfaceMuted),
-                    filled: true,
-                    fillColor: theme.background,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  textInputAction: TextInputAction.next,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'EMAIL (OPTIONAL)',
-                  style: TextStyle(
-                    color: theme.onSurfaceMuted,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _emailController,
-                  style: TextStyle(color: theme.onSurface),
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    hintText: LocalUserProfile.defaultEmail,
                     hintStyle: TextStyle(color: theme.onSurfaceMuted),
                     filled: true,
                     fillColor: theme.background,
