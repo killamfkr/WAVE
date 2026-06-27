@@ -6,6 +6,8 @@ import 'package:hive/hive.dart';
 import 'hive_boxes.dart';
 import '../sync/sync_metadata.dart';
 import '../sync/sync_trigger_providers.dart';
+import '../audio/dj_tts/dj_tts_config.dart';
+import '../audio/dj_tts/dj_tts_provider.dart';
 
 enum AudioQuality { standard, high, lossless }
 
@@ -22,6 +24,10 @@ class AppSettings {
     this.notifyNewReleases = true,
     this.notifyRecommendations = true,
     this.notifyPlaybackErrors = true,
+    this.djTtsProvider = DjTtsProvider.edge,
+    this.djOpenAiVoice = 'onyx',
+    this.djElevenLabsVoiceId = DjTtsPresets.elevenLabsJosh,
+    this.djOpenAiInstructions = DjTtsPresets.defaultDjInstructions,
   });
 
   final AudioQuality audioQuality;
@@ -33,6 +39,10 @@ class AppSettings {
   final bool notifyNewReleases;
   final bool notifyRecommendations;
   final bool notifyPlaybackErrors;
+  final DjTtsProvider djTtsProvider;
+  final String djOpenAiVoice;
+  final String djElevenLabsVoiceId;
+  final String djOpenAiInstructions;
 
   AppSettings copyWith({
     AudioQuality? audioQuality,
@@ -44,6 +54,10 @@ class AppSettings {
     bool? notifyNewReleases,
     bool? notifyRecommendations,
     bool? notifyPlaybackErrors,
+    DjTtsProvider? djTtsProvider,
+    String? djOpenAiVoice,
+    String? djElevenLabsVoiceId,
+    String? djOpenAiInstructions,
   }) {
     return AppSettings(
       audioQuality: audioQuality ?? this.audioQuality,
@@ -57,6 +71,12 @@ class AppSettings {
           notifyRecommendations ?? this.notifyRecommendations,
       notifyPlaybackErrors:
           notifyPlaybackErrors ?? this.notifyPlaybackErrors,
+      djTtsProvider: djTtsProvider ?? this.djTtsProvider,
+      djOpenAiVoice: djOpenAiVoice ?? this.djOpenAiVoice,
+      djElevenLabsVoiceId:
+          djElevenLabsVoiceId ?? this.djElevenLabsVoiceId,
+      djOpenAiInstructions:
+          djOpenAiInstructions ?? this.djOpenAiInstructions,
     );
   }
 
@@ -70,6 +90,10 @@ class AppSettings {
         'notifyNewReleases': notifyNewReleases,
         'notifyRecommendations': notifyRecommendations,
         'notifyPlaybackErrors': notifyPlaybackErrors,
+        'djTtsProvider': djTtsProvider.name,
+        'djOpenAiVoice': djOpenAiVoice,
+        'djElevenLabsVoiceId': djElevenLabsVoiceId,
+        'djOpenAiInstructions': djOpenAiInstructions,
       };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -80,6 +104,10 @@ class AppSettings {
     AppLanguage lang(String? n) => AppLanguage.values.firstWhere(
           (e) => e.name == n,
           orElse: () => AppLanguage.english,
+        );
+    DjTtsProvider djProvider(String? n) => DjTtsProvider.values.firstWhere(
+          (e) => e.name == n,
+          orElse: () => DjTtsProvider.edge,
         );
     final bandsRaw = json['equalizerBandsDb'];
     final bands = bandsRaw is List
@@ -100,6 +128,12 @@ class AppSettings {
           json['notifyRecommendations'] as bool? ?? true,
       notifyPlaybackErrors:
           json['notifyPlaybackErrors'] as bool? ?? true,
+      djTtsProvider: djProvider(json['djTtsProvider'] as String?),
+      djOpenAiVoice: json['djOpenAiVoice'] as String? ?? 'onyx',
+      djElevenLabsVoiceId:
+          json['djElevenLabsVoiceId'] as String? ?? DjTtsPresets.elevenLabsJosh,
+      djOpenAiInstructions: json['djOpenAiInstructions'] as String? ??
+          DjTtsPresets.defaultDjInstructions,
     );
   }
 }
@@ -188,6 +222,26 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
 
   Future<void> setNotifyPlaybackErrors(bool v) async {
     state = state.copyWith(notifyPlaybackErrors: v);
+    await _persist();
+  }
+
+  Future<void> setDjTtsProvider(DjTtsProvider provider) async {
+    state = state.copyWith(djTtsProvider: provider);
+    await _persist();
+  }
+
+  Future<void> setDjOpenAiVoice(String voice) async {
+    state = state.copyWith(djOpenAiVoice: voice.trim());
+    await _persist();
+  }
+
+  Future<void> setDjElevenLabsVoiceId(String voiceId) async {
+    state = state.copyWith(djElevenLabsVoiceId: voiceId.trim());
+    await _persist();
+  }
+
+  Future<void> setDjOpenAiInstructions(String instructions) async {
+    state = state.copyWith(djOpenAiInstructions: instructions.trim());
     await _persist();
   }
 }

@@ -18,6 +18,7 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/theme_notifier.dart';
 import 'core/api/deezer_api_client.dart';
 import 'core/api/lastfm_api_client.dart';
+import 'core/audio/dj_tts/dj_tts_env.dart';
 import 'core/audio/local_proxy.dart';
 import 'services/app_updater_service.dart';
 import 'widgets/theme_morph.dart';
@@ -34,6 +35,7 @@ Future<void> main() async {
   // Load configuration and check API availability
   await DeezerApiClient.loadEnv();
   await LastfmApiClient.loadEnv();
+  await DjTtsEnv.loadEnv();
   await SupabaseSyncConfig.loadEnv();
   await AppUpdaterService.loadEnv();
   await DeezerApiClient.checkGeoRestriction();

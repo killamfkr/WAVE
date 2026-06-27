@@ -5,6 +5,8 @@ import '../api/models/player_state.dart';
 import '../storage/library_providers.dart';
 import '../storage/recently_played.dart';
 import '../storage/settings_providers.dart';
+import 'dj_tts/dj_tts_config.dart';
+import 'dj_tts/dj_tts_key_store.dart';
 import 'music_player_service.dart';
 import 'personal_dj_service.dart';
 import 'personal_dj_voice_service.dart';
@@ -145,6 +147,11 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
     }
   }
 
+  Future<DjTtsConfig> _ttsConfig() => DjTtsConfig.resolve(
+        settings: ref.read(appSettingsProvider),
+        keyStore: ref.read(djTtsKeyStoreProvider),
+      );
+
   Future<void> _speak(
     String text, {
     int? trackId,
@@ -159,6 +166,7 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
         text,
         player: _player,
         mood: mood,
+        ttsConfig: await _ttsConfig(),
       );
       if (trackId != null) {
         _lastSpokenTrackId = trackId;

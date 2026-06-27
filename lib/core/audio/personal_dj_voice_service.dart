@@ -9,13 +9,15 @@ import 'package:path_provider/path_provider.dart';
 
 import '../api/models/player_state.dart';
 import '../utils/app_logger.dart';
+import 'dj_tts/dj_tts_config.dart';
+import 'dj_tts/dj_tts_synthesizer.dart';
 import 'music_player_service.dart';
 import 'personal_dj_service.dart';
-import 'wave_edge_tts.dart';
 
-/// Plays DJ voice lines using Edge neural TTS, with on-device TTS fallback.
+/// Plays DJ voice lines using cloud TTS APIs, Edge neural TTS, or on-device fallback.
 class PersonalDjVoiceService {
-  PersonalDjVoiceService() {
+  PersonalDjVoiceService({DjTtsSynthesizer? synthesizer})
+      : _synthesizer = synthesizer ?? DjTtsSynthesizer() {
     _initFallbackTts();
     _player.stream.completed.listen((completed) {
       if (completed && _playbackDone != null && !_playbackDone!.isCompleted) {
@@ -24,6 +26,7 @@ class PersonalDjVoiceService {
     });
   }
 
+  final DjTtsSynthesizer _synthesizer;
   final FlutterTts _fallbackTts = FlutterTts();
   final Player _player = Player();
   bool _speaking = false;
@@ -112,6 +115,7 @@ class PersonalDjVoiceService {
     String text, {
     MusicPlayerService? player,
     PersonalDjMood mood = PersonalDjMood.mixed,
+    required DjTtsConfig ttsConfig,
   }) async {
     final line = text.trim();
     if (line.isEmpty) return;
@@ -128,12 +132,16 @@ class PersonalDjVoiceService {
 
     _speaking = true;
     try {
-      final bytes = await _synthesizeEdge(line, mood);
+      final bytes = await _synthesizer.synthesize(
+        text: line,
+        config: ttsConfig,
+        mood: mood,
+      );
 
       if (bytes.isNotEmpty) {
         await _playMp3(bytes);
       } else {
-        appLogger.w('Edge DJ voice empty — using on-device male fallback');
+        appLogger.w('Cloud DJ voice empty — using on-device male fallback');
         await _speakFallback(line);
       }
     } catch (e) {
@@ -148,34 +156,12 @@ class PersonalDjVoiceService {
     }
   }
 
-  Future<Uint8List> _synthesizeEdge(String line, PersonalDjMood mood) async {
-    for (final voice in WaveEdgeTts.preferredMaleVoices) {
-      try {
-        final bytes = await WaveEdgeTts(voice: voice).synthesize(
-          line,
-          rate: _rateFor(mood),
-          pitch: '-4Hz',
-        );
-        if (bytes.isNotEmpty) {
-          if (voice != WaveEdgeTts.defaultVoice) {
-            appLogger.w('DJ Edge voice fell back to $voice');
-          }
-          return bytes;
-        }
-      } catch (e) {
-        appLogger.w('Edge voice $voice failed: $e');
-      }
-    }
-    return Uint8List(0);
-  }
-
   Future<void> _playMp3(Uint8List bytes) async {
     final path = await _writeTempMp3(bytes);
     _playbackDone = Completer<void>();
     await _player.setVolume(100);
     await _player.open(Media(path), play: true);
 
-    // Wait until playback actually starts, then until it completes.
     await _player.stream.playing.firstWhere((playing) => playing);
     final duration = _player.state.duration;
     if (duration > Duration.zero) {
@@ -201,13 +187,6 @@ class PersonalDjVoiceService {
     await _fallbackTts.speak(line);
     await done.future.timeout(const Duration(seconds: 45));
   }
-
-  String _rateFor(PersonalDjMood mood) => switch (mood) {
-        PersonalDjMood.chill => '+12%',
-        PersonalDjMood.hype => '+26%',
-        PersonalDjMood.discover => '+16%',
-        PersonalDjMood.mixed => '+20%',
-      };
 
   bool _isPreferredMaleVoiceName(String name) => <String>[
         'andrew',

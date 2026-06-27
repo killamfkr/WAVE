@@ -17,6 +17,7 @@ import '../../widgets/snap_horizontal_list.dart';
 import '../../widgets/theme_morph.dart';
 import '../../services/app_updater_service.dart';
 import '../../widgets/update_dialog.dart';
+import 'dj_voice_settings_section.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -46,6 +47,8 @@ class SettingsScreen extends ConsumerWidget {
             _SectionTitle('Playback'),
             SizedBox(height: 12),
             _AutoplaySimilarRow(),
+            SizedBox(height: 28),
+            DjVoiceSettingsSection(),
             SizedBox(height: 28),
             _SectionTitle('Equalizer'),
             SizedBox(height: 12),
