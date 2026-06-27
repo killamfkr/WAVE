@@ -13,14 +13,12 @@ class PersonalDjSession {
   const PersonalDjSession({
     required this.queue,
     required this.seed,
-    required this.opener,
     required this.openerSpoken,
     required this.likedTrackIds,
   });
 
   final List<DeezerTrack> queue;
   final DeezerTrack seed;
-  final String opener;
   final String openerSpoken;
   final Set<int> likedTrackIds;
 }
@@ -63,7 +61,7 @@ class PersonalDjService {
       queue.insert(_rng.nextInt(min(3, queue.length + 1)), seed);
     }
 
-    final openerLine = PersonalDjSpeech.opener(
+    final openerSpoken = PersonalDjSpeech.opener(
       seed: seed,
       fromLiked: likedIds.contains(seed.id),
       fromRecent: recent.any((e) => e.kind == 'track' && e.id == seed.id),
@@ -73,8 +71,7 @@ class PersonalDjService {
     return PersonalDjSession(
       queue: queue,
       seed: seed,
-      opener: openerLine.display,
-      openerSpoken: openerLine.spoken,
+      openerSpoken: openerSpoken,
       likedTrackIds: likedIds,
     );
   }
@@ -133,7 +130,7 @@ class PersonalDjService {
     }
   }
 
-  static DjLine linerFor(
+  static String linerFor(
     DeezerTrack track, {
     required Set<int> likedIds,
     PersonalDjMood mood = PersonalDjMood.mixed,

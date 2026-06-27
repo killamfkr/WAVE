@@ -1,123 +1,34 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
-import 'package:flutter_tts/flutter_tts.dart';
+import 'package:edge_tts/edge_tts.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../utils/app_logger.dart';
 import 'music_player_service.dart';
 import 'personal_dj_service.dart';
-import 'personal_dj_speech.dart';
 
-/// Speaks Personal DJ liners with paced delivery and music ducking.
+/// Plays DJ voice lines using Microsoft Edge neural TTS (natural speech).
 class PersonalDjVoiceService {
-  final FlutterTts _tts = FlutterTts();
-  bool _ready = false;
+  PersonalDjVoiceService() {
+    _player.stream.completed.listen((completed) {
+      if (completed && _playbackDone != null && !_playbackDone!.isCompleted) {
+        _playbackDone!.complete();
+      }
+    });
+  }
+
+  static const _voice = 'en-US-DavisNeural';
+
+  final Player _player = Player();
   bool _speaking = false;
-  PersonalDjMood _mood = PersonalDjMood.mixed;
-  Completer<void>? _completion;
+  Completer<void>? _playbackDone;
+  int _fileCounter = 0;
 
   bool get isSpeaking => _speaking;
-
-  Future<void> _ensureReady({PersonalDjMood mood = PersonalDjMood.mixed}) async {
-    if (_ready && _mood == mood) return;
-    _mood = mood;
-
-    await _tts.setLanguage('en-US');
-    await _applyMoodVoice(mood);
-    await _tts.setVolume(1.0);
-    await _tts.awaitSpeakCompletion(true);
-    await _pickBestVoice();
-
-    if (Platform.isIOS) {
-      await _tts.setSharedInstance(true);
-      await _tts.setIosAudioCategory(
-        IosTextToSpeechAudioCategory.playback,
-        <IosTextToSpeechAudioCategoryOptions>[
-          IosTextToSpeechAudioCategoryOptions.duckOthers,
-          IosTextToSpeechAudioCategoryOptions.mixWithOthers,
-        ],
-      );
-    }
-
-    if (Platform.isAndroid) {
-      await _tts.setQueueMode(1);
-    }
-
-    _tts.setCompletionHandler(() {
-      if (!(_completion?.isCompleted ?? true)) {
-        _completion?.complete();
-      }
-    });
-    _tts.setErrorHandler((msg) {
-      appLogger.w('DJ TTS error: $msg');
-      if (!(_completion?.isCompleted ?? true)) {
-        _completion?.complete();
-      }
-    });
-
-    _ready = true;
-  }
-
-  Future<void> _applyMoodVoice(PersonalDjMood mood) async {
-    switch (mood) {
-      case PersonalDjMood.chill:
-        await _tts.setSpeechRate(0.44);
-        await _tts.setPitch(0.92);
-      case PersonalDjMood.hype:
-        await _tts.setSpeechRate(0.51);
-        await _tts.setPitch(1.02);
-      case PersonalDjMood.discover:
-        await _tts.setSpeechRate(0.47);
-        await _tts.setPitch(1.0);
-      case PersonalDjMood.mixed:
-        await _tts.setSpeechRate(0.48);
-        await _tts.setPitch(0.97);
-    }
-  }
-
-  Future<void> _pickBestVoice() async {
-    try {
-      final raw = await _tts.getVoices;
-      if (raw is! List) return;
-
-      Map<dynamic, dynamic>? best;
-      var bestScore = -1;
-
-      for (final voice in raw) {
-        if (voice is! Map) continue;
-        final locale = (voice['locale'] ?? '').toString().toLowerCase();
-        if (!locale.startsWith('en')) continue;
-
-        final name = (voice['name'] ?? '').toString().toLowerCase();
-        var score = 0;
-        if (name.contains('neural')) score += 60;
-        if (name.contains('enhanced')) score += 50;
-        if (name.contains('premium')) score += 45;
-        if (name.contains('wavenet')) score += 40;
-        if (name.contains('network')) score += 25;
-        if (locale.contains('us')) score += 12;
-        if (name.contains('sfg') || name.contains('iom')) score += 8;
-        if (name.contains('male')) score += 4;
-        if (name.contains('female')) score += 2;
-        if (name.contains('local') && !name.contains('network')) score -= 8;
-
-        if (score > bestScore) {
-          bestScore = score;
-          best = voice;
-        }
-      }
-
-      if (best != null) {
-        await _tts.setVoice(<String, String>{
-          'name': best['name']?.toString() ?? '',
-          'locale': best['locale']?.toString() ?? 'en-US',
-        });
-        appLogger.i('DJ voice: ${best['name']}');
-      }
-    } catch (e) {
-      appLogger.w('Could not pick DJ voice: $e');
-    }
-  }
 
   Future<void> speak(
     String text, {
@@ -128,51 +39,80 @@ class PersonalDjVoiceService {
     final line = text.trim();
     if (line.isEmpty) return;
 
-    await _ensureReady(mood: mood);
     await stop();
 
     double? savedVolume;
     if (duck && player != null) {
       savedVolume = player.playerState.volume;
-      await player.setVolume((savedVolume * 0.12).clamp(0.0, 1.0));
+      await player.setVolume((savedVolume * 0.1).clamp(0.0, 1.0));
     }
 
     _speaking = true;
     try {
-      final phrases = PersonalDjSpeech.phrasesForDelivery(line);
-      for (var i = 0; i < phrases.length; i++) {
-        if (i > 0) {
-          await Future<void>.delayed(const Duration(milliseconds: 320));
-        }
-        await _speakPhrase(phrases[i]);
+      final bytes = await Communicate(
+        text: line,
+        voice: _voice,
+        rate: _rateFor(mood),
+        pitch: '-1Hz',
+        volume: '+0%',
+      ).toBytes();
+
+      if (bytes.isEmpty) {
+        appLogger.w('DJ voice: empty audio for line');
+        return;
       }
+
+      final path = await _writeTempMp3(bytes);
+      _playbackDone = Completer<void>();
+      await _player.open(Media(path));
+      await _player.play();
+      await _playbackDone!.future.timeout(
+        const Duration(seconds: 45),
+        onTimeout: () {
+          appLogger.w('DJ voice playback timed out');
+          if (!(_playbackDone?.isCompleted ?? true)) {
+            _playbackDone?.complete();
+          }
+        },
+      );
     } catch (e) {
       appLogger.w('DJ voice failed: $e');
     } finally {
       _speaking = false;
+      _playbackDone = null;
       if (duck && player != null && savedVolume != null) {
         await player.setVolume(savedVolume);
       }
     }
   }
 
-  Future<void> _speakPhrase(String phrase) async {
-    _completion = Completer<void>();
-    await _tts.speak(phrase);
-    await _completion!.future.timeout(
-      const Duration(seconds: 30),
-      onTimeout: () => appLogger.w('DJ TTS phrase timed out'),
-    );
+  String _rateFor(PersonalDjMood mood) => switch (mood) {
+        PersonalDjMood.chill => '-6%',
+        PersonalDjMood.hype => '+14%',
+        PersonalDjMood.discover => '+2%',
+        PersonalDjMood.mixed => '+6%',
+      };
+
+  Future<String> _writeTempMp3(Uint8List bytes) async {
+    final dir = await getTemporaryDirectory();
+    final path = p.join(dir.path, 'wave_dj_${_fileCounter++}.mp3');
+    await File(path).writeAsBytes(bytes, flush: true);
+    return path;
   }
 
   Future<void> stop() async {
     if (_speaking) {
-      await _tts.stop();
+      await _player.stop();
     }
     _speaking = false;
-    if (!(_completion?.isCompleted ?? true)) {
-      _completion?.complete();
+    if (!(_playbackDone?.isCompleted ?? true)) {
+      _playbackDone?.complete();
     }
-    _completion = null;
+    _playbackDone = null;
+  }
+
+  Future<void> dispose() async {
+    await stop();
+    await _player.dispose();
   }
 }

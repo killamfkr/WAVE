@@ -16,8 +16,6 @@ class PersonalDjState {
     this.isSpeaking = false,
     this.voiceEnabled = true,
     this.mood = PersonalDjMood.mixed,
-    this.liner,
-    this.opener,
     this.errorMessage,
   });
 
@@ -26,8 +24,6 @@ class PersonalDjState {
   final bool isSpeaking;
   final bool voiceEnabled;
   final PersonalDjMood mood;
-  final String? liner;
-  final String? opener;
   final String? errorMessage;
 
   PersonalDjState copyWith({
@@ -36,8 +32,6 @@ class PersonalDjState {
     bool? isSpeaking,
     bool? voiceEnabled,
     PersonalDjMood? mood,
-    String? liner,
-    String? opener,
     String? errorMessage,
     bool clearError = false,
   }) {
@@ -47,8 +41,6 @@ class PersonalDjState {
       isSpeaking: isSpeaking ?? this.isSpeaking,
       voiceEnabled: voiceEnabled ?? this.voiceEnabled,
       mood: mood ?? this.mood,
-      liner: liner ?? this.liner,
-      opener: opener ?? this.opener,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }
@@ -56,7 +48,7 @@ class PersonalDjState {
 
 final personalDjVoiceProvider = Provider<PersonalDjVoiceService>((ref) {
   final voice = PersonalDjVoiceService();
-  ref.onDispose(voice.stop);
+  ref.onDispose(voice.dispose);
   return voice;
 });
 
@@ -99,8 +91,6 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
         isActive: true,
         voiceEnabled: voiceEnabled,
         mood: mood,
-        opener: session.opener,
-        liner: session.opener,
       );
 
       if (voiceEnabled) {
@@ -131,13 +121,12 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
     if (!state.isActive || track == null) return;
     if (track.id == _lastSpokenTrackId) return;
 
-    final line = PersonalDjService.linerFor(
+    final spoken = PersonalDjService.linerFor(
       track,
       likedIds: _likedIds,
       mood: state.mood,
     );
-    state = state.copyWith(liner: line.display);
-    _speak(line.spoken, duck: true, trackId: track.id, mood: state.mood);
+    _speak(spoken, duck: true, trackId: track.id, mood: state.mood);
   }
 
   Future<void> toggleVoice() async {
@@ -148,16 +137,9 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
       return;
     }
     state = state.copyWith(voiceEnabled: next);
-    final line = state.liner ?? state.opener;
     if (_lastSpokenScript != null && state.isActive) {
       await _speak(
         _lastSpokenScript!,
-        duck: _player.playerState.currentTrack != null,
-        mood: state.mood,
-      );
-    } else if (line != null && state.isActive) {
-      await _speak(
-        line,
         duck: _player.playerState.currentTrack != null,
         mood: state.mood,
       );

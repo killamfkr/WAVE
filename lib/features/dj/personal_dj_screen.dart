@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -142,8 +140,7 @@ class _StartDjViewState extends State<_StartDjView> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'A continuous mix built from your likes, recent plays, '
-                  'and similar tracks — with a natural DJ voice as it flows.',
+                  'A continuous mix from your taste — your DJ talks between tracks.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: theme.onSurfaceMuted,
@@ -262,100 +259,12 @@ class _ActiveDjView extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
               children: <Widget>[
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    theme.cardRadius == 0 ? 0 : 20,
-                  ),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: theme.surface.withValues(alpha: 0.85),
-                        borderRadius: BorderRadius.circular(
-                          theme.cardRadius == 0 ? 0 : 20,
-                        ),
-                        border: Border.all(
-                          color: theme.onSurface.withValues(alpha: 0.06),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          if (dj.isSpeaking)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: Row(
-                                children: <Widget>[
-                                  Icon(
-                                    PhosphorIconsFill.speakerHigh,
-                                    size: 14,
-                                    color: theme.accent,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'DJ IS SPEAKING',
-                                    style: TextStyle(
-                                      color: theme.accent,
-                                      fontSize: 10,
-                                      letterSpacing: 1.4,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 400),
-                            child: Text(
-                              dj.liner ?? dj.opener ?? 'Building your mix…',
-                              key: ValueKey(dj.liner ?? dj.opener),
-                              style: TextStyle(
-                                color: theme.onSurface,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                height: 1.4,
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                const SizedBox(height: 16),
+                _DjArtwork(
+                  theme: theme,
+                  cover: cover,
+                  isSpeaking: dj.isSpeaking,
                 ),
-                const SizedBox(height: 28),
-                if (cover != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(
-                      theme.cardRadius == 0 ? 0 : 16,
-                    ),
-                    child: SizedBox(
-                      width: 220,
-                      height: 220,
-                      child: CachedNetworkImage(
-                        imageUrl: cover,
-                        fit: BoxFit.cover,
-                        placeholder: (_, _) =>
-                            ColoredBox(color: theme.surface),
-                        errorWidget: (_, _, _) =>
-                            ColoredBox(color: theme.surface),
-                      ),
-                    ),
-                  )
-                else
-                  Container(
-                    width: 220,
-                    height: 220,
-                    color: theme.surface,
-                    child: Icon(
-                      PhosphorIconsRegular.musicNote,
-                      size: 64,
-                      color: theme.onSurfaceMuted,
-                    ),
-                  ),
                 const SizedBox(height: 24),
                 if (track != null) ...<Widget>[
                   Text(
@@ -383,9 +292,9 @@ class _ActiveDjView extends ConsumerWidget {
                 ],
                 const SizedBox(height: 28),
                 WaveformBars(
-                  isPlaying: isPlaying,
+                  isPlaying: isPlaying || dj.isSpeaking,
                   height: 72,
-                  color: theme.accent,
+                  color: dj.isSpeaking ? theme.accent : theme.accent,
                 ),
                 const SizedBox(height: 16),
                 WaveProgressBar(
@@ -456,6 +365,127 @@ class _ActiveDjView extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _DjArtwork extends StatefulWidget {
+  const _DjArtwork({
+    required this.theme,
+    required this.cover,
+    required this.isSpeaking,
+  });
+
+  final AppTheme theme;
+  final String? cover;
+  final bool isSpeaking;
+
+  @override
+  State<_DjArtwork> createState() => _DjArtworkState();
+}
+
+class _DjArtworkState extends State<_DjArtwork>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _syncPulse();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DjArtwork oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncPulse();
+  }
+
+  void _syncPulse() {
+    if (widget.isSpeaking) {
+      if (!_pulse.isAnimating) _pulse.repeat(reverse: true);
+    } else {
+      _pulse.stop();
+      _pulse.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+    return SizedBox(
+      width: 240,
+      height: 240,
+      child: Stack(
+        alignment: Alignment.center,
+        children: <Widget>[
+          if (widget.isSpeaking)
+            AnimatedBuilder(
+              animation: _pulse,
+              builder: (context, _) {
+                return Transform.scale(
+                  scale: 1.0 + (_pulse.value * 0.1),
+                  child: Container(
+                    width: 236,
+                    height: 236,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: theme.accent.withValues(
+                          alpha: 0.35 + (_pulse.value * 0.35),
+                        ),
+                        width: 2.5,
+                      ),
+                      boxShadow: <BoxShadow>[
+                        BoxShadow(
+                          color: theme.accent.withValues(
+                            alpha: 0.2 + (_pulse.value * 0.25),
+                          ),
+                          blurRadius: 28,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(
+              theme.cardRadius == 0 ? 0 : 16,
+            ),
+            child: SizedBox(
+              width: 220,
+              height: 220,
+              child: widget.cover != null
+                  ? CachedNetworkImage(
+                      imageUrl: widget.cover!,
+                      fit: BoxFit.cover,
+                      placeholder: (_, _) =>
+                          ColoredBox(color: theme.surface),
+                      errorWidget: (_, _, _) =>
+                          ColoredBox(color: theme.surface),
+                    )
+                  : ColoredBox(
+                      color: theme.surface,
+                      child: Icon(
+                        PhosphorIconsRegular.musicNote,
+                        size: 64,
+                        color: theme.onSurfaceMuted,
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
