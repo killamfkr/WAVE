@@ -14,11 +14,12 @@ import '../storage/hive_boxes.dart';
 import 'local_proxy.dart';
 import 'music_player_service.dart';
 import 'youtube_stream_resolver.dart';
+import 'android_auto_browse.dart';
 
 /// Real audio backend powered by `media_kit` (libmpv).
 /// Uses a dual-player architecture to support true overlapping crossfades.
 class MediaKitMusicPlayerService extends BaseAudioHandler
-    with SeekHandler
+    with QueueHandler, SeekHandler
     implements MusicPlayerService {
   MediaKitMusicPlayerService({YoutubeStreamResolver? resolver})
       : _resolver = resolver ?? YoutubeStreamResolver() {
@@ -187,27 +188,23 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
 
     if (_state.currentTrack != null) {
       final t = _state.currentTrack!;
-      final oldMediaItem = mediaItem.value;
-      if (oldMediaItem?.id != t.id.toString()) {
-        mediaItem.add(MediaItem(
-          id: t.id.toString(),
-          title: t.title,
-          artist: t.artist?.name,
-          album: t.album?.title,
-          duration: t.duration != null
-              ? Duration(seconds: t.duration!)
-              : _state.duration,
-          artUri: t.album?.coverMedium != null
-              ? Uri.parse(t.album!.coverMedium!)
-              : null,
-        ));
-      }
+      mediaItem.add(trackToMediaItem(t).copyWith(
+        duration: _state.duration > Duration.zero
+            ? _state.duration
+            : (t.duration != null ? Duration(seconds: t.duration!) : null),
+      ));
     }
   }
 
   void _emitQueue(QueueState next) {
     _queue = next;
     _queueCtrl.add(next);
+    _syncQueueToAudioService();
+  }
+
+  void _syncQueueToAudioService() {
+    final upcoming = _queue.upcoming.map(trackToMediaItem).toList(growable: false);
+    queue.add(upcoming);
   }
 
   // ---------------------------------------------------------------------------
@@ -509,6 +506,44 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
 
   // ---------------------------------------------------------------------------
   // AudioService / Playback control ------------------------------------------
+
+  @override
+  Future<void> skipToQueueItem(int index) async {
+    if (index < 0 || index >= _queue.upcoming.length) return;
+    final selected = _queue.upcoming[index];
+    final newUpcoming = <DeezerTrack>[
+      ..._queue.upcoming.sublist(index + 1),
+    ];
+    final newHistory = <DeezerTrack>[
+      ..._queue.history,
+      if (_queue.current != null) _queue.current!,
+      ..._queue.upcoming.sublist(0, index),
+    ];
+    _emitQueue(_queue.copyWith(
+      history: newHistory,
+      current: selected,
+      upcoming: newUpcoming,
+    ));
+    await _startPlayback(selected, autoCrossfade: false);
+  }
+
+  @override
+  Future<List<MediaItem>> getChildren(
+    String parentMediaId, [
+    Map<String, dynamic>? options,
+  ]) async {
+    return androidAutoChildrenFor(parentMediaId);
+  }
+
+  @override
+  Future<void> playFromMediaId(
+    String mediaId, [
+    Map<String, dynamic>? extras,
+  ]) async {
+    final tracks = tracksForMediaId(mediaId);
+    if (tracks.isEmpty) return;
+    await playTracks(tracks);
+  }
 
   @override
   Future<void> play() => _activePlayer.play();

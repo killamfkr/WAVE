@@ -65,6 +65,7 @@ Future<void> main() async {
       androidNotificationChannelName: 'Music Playback',
       androidNotificationOngoing: true,
       androidStopForegroundOnPause: true,
+      androidNotificationClickStartsActivity: true,
     ),
   );
 
