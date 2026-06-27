@@ -5,7 +5,9 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../core/audio/player_providers.dart';
 import '../../core/router/app_router.dart';
+import '../../core/storage/library_providers.dart';
 import '../../core/storage/settings_providers.dart';
+import '../../core/storage/user_profile_providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/themes.dart';
 import '../../widgets/snap_horizontal_list.dart';
@@ -160,19 +162,37 @@ class _Card extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Account ------------------------------------------------------------------
 
-class _AccountSection extends StatelessWidget {
+class _AccountSection extends ConsumerWidget {
   const _AccountSection();
 
+  void _openProfileEditor(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _EditProfileSheet(
+        profile: ref.read(userProfileProvider),
+        playlistCount: ref.read(userPlaylistsProvider).length,
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = AppThemeScope.of(context);
+    final profile = ref.watch(userProfileProvider);
+    final playlistCount = ref.watch(userPlaylistsProvider).length;
+    final playlistLabel = playlistCount == 1
+        ? '1 saved playlist'
+        : '$playlistCount saved playlists';
+
     return _Card(
-      child: Row(
-        children: <Widget>[
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {},
-            child: Container(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _openProfileEditor(context, ref),
+        child: Row(
+          children: <Widget>[
+            Container(
               width: 56,
               height: 56,
               decoration: BoxDecoration(
@@ -187,37 +207,266 @@ class _AccountSection extends StatelessWidget {
                 size: 26,
               ),
             ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    profile.displayName,
+                    style: TextStyle(
+                      color: theme.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    playlistLabel,
+                    style: TextStyle(
+                      color: theme.onSurfaceMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                  if (profile.email != null) ...<Widget>[
+                    const SizedBox(height: 2),
+                    Text(
+                      profile.email!,
+                      style: TextStyle(
+                        color: theme.onSurfaceMuted.withValues(alpha: 0.8),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Icon(
+              PhosphorIconsRegular.caretRight,
+              color: theme.onSurfaceMuted,
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EditProfileSheet extends ConsumerStatefulWidget {
+  const _EditProfileSheet({
+    required this.profile,
+    required this.playlistCount,
+  });
+
+  final LocalUserProfile profile;
+  final int playlistCount;
+
+  @override
+  ConsumerState<_EditProfileSheet> createState() => _EditProfileSheetState();
+}
+
+class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _emailController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.profile.displayName);
+    _emailController = TextEditingController(text: widget.profile.email ?? '');
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
+
+    final email = _emailController.text.trim();
+    await ref.read(userProfileProvider.notifier).setDisplayName(name);
+    await ref
+        .read(userProfileProvider.notifier)
+        .setEmail(email.isEmpty ? null : email);
+    await ref.read(userPlaylistsProvider.notifier).syncCreatorFromProfile();
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppThemeScope.of(context);
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final playlistLabel = widget.playlistCount == 1
+        ? '1 playlist saved on this device'
+        : '${widget.playlistCount} playlists saved on this device';
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.52,
+        maxChildSize: 0.85,
+        minChildSize: 0.4,
+        expand: false,
+        builder: (ctx, scrollController) {
+          return Container(
+            decoration: BoxDecoration(
+              color: theme.surface,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: ListView(
+              controller: scrollController,
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
               children: <Widget>[
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: theme.onSurfaceMuted.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
                 Text(
-                  'You',
+                  'Your Profile',
                   style: TextStyle(
                     color: theme.onSurface,
-                    fontSize: 16,
+                    fontSize: 20,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 6),
                 Text(
-                  'local@wave.app',
+                  'A local profile for your library. No login required — playlists stay on this device.',
                   style: TextStyle(
                     color: theme.onSurfaceMuted,
-                    fontSize: 12,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'DISPLAY NAME',
+                  style: TextStyle(
+                    color: theme.onSurfaceMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _nameController,
+                  autofocus: true,
+                  style: TextStyle(color: theme.onSurface),
+                  decoration: InputDecoration(
+                    hintText: LocalUserProfile.defaultDisplayName,
+                    hintStyle: TextStyle(color: theme.onSurfaceMuted),
+                    filled: true,
+                    fillColor: theme.background,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'EMAIL (OPTIONAL)',
+                  style: TextStyle(
+                    color: theme.onSurfaceMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _emailController,
+                  style: TextStyle(color: theme.onSurface),
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    hintText: LocalUserProfile.defaultEmail,
+                    hintStyle: TextStyle(color: theme.onSurfaceMuted),
+                    filled: true,
+                    fillColor: theme.background,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _save(),
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: theme.background,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: theme.onSurface.withValues(alpha: 0.06),
+                    ),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(
+                        PhosphorIconsRegular.listBullets,
+                        color: theme.accent,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          playlistLabel,
+                          style: TextStyle(
+                            color: theme.onSurface,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.accent,
+                      foregroundColor: theme.background,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          theme.cardRadius == 0 ? 4 : 10,
+                        ),
+                      ),
+                    ),
+                    child: const Text(
+                      'Save Profile',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 14,
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
-          Icon(
-            PhosphorIconsRegular.caretRight,
-            color: theme.onSurfaceMuted,
-            size: 18,
-          ),
-        ],
+          );
+        },
       ),
     );
   }

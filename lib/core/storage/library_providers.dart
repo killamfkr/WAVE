@@ -9,6 +9,7 @@ import '../api/models/deezer_playlist.dart';
 import '../api/models/deezer_track.dart';
 import '../api/models/deezer_user.dart';
 import 'hive_boxes.dart';
+import 'user_profile_providers.dart';
 
 /// Ensures complex models are recursively converted to Maps before Hive storage.
 /// This prevents "unknown type" errors when nested objects (like Artist in Track)
@@ -194,6 +195,9 @@ final followedArtistsProvider =
 // User playlists ----------------------------------------------------------
 
 class UserPlaylistsNotifier extends Notifier<List<DeezerPlaylist>> {
+  DeezerUser _creatorFromProfile() =>
+      ref.read(userProfileProvider).toDeezerUser();
+
   @override
   List<DeezerPlaylist> build() {
     final box = Hive.box<dynamic>(HiveBoxes.playlists);
@@ -221,11 +225,24 @@ class UserPlaylistsNotifier extends Notifier<List<DeezerPlaylist>> {
       picture: coverUrl,
       pictureMedium: coverUrl,
       pictureBig: coverUrl,
-      creator: const DeezerUser(id: 0, name: 'You'),
+      creator: _creatorFromProfile(),
     );
     await Hive.box<dynamic>(HiveBoxes.playlists).put(id.toString(), _deepJson(pl.toJson()));
     state = <DeezerPlaylist>[pl, ...state];
     return pl;
+  }
+
+  Future<void> syncCreatorFromProfile() async {
+    if (state.isEmpty) return;
+    final creator = _creatorFromProfile();
+    final box = Hive.box<dynamic>(HiveBoxes.playlists);
+    final updated = state
+        .map((p) => p.copyWith(creator: creator))
+        .toList(growable: false);
+    for (final p in updated) {
+      await box.put(p.id.toString(), _deepJson(p.toJson()));
+    }
+    state = updated;
   }
 
   Future<void> reorder(int oldIndex, int newIndex) async {
