@@ -44,22 +44,22 @@ class PersonalDjService {
     final seed = await _pickSeed(liked: liked, recent: recent);
     final similar = await _similar.resolve(seed, excludeIds: {seed.id});
 
-    final queue = <DeezerTrack>[seed, ...similar];
+    final tail = <DeezerTrack>[...similar];
 
     for (final track in liked) {
-      if (queue.length >= 20) break;
-      if (!queue.any((t) => t.id == track.id)) {
-        queue.add(track);
+      if (tail.length >= 19) break;
+      if (track.id == seed.id) continue;
+      if (!tail.any((t) => t.id == track.id)) {
+        tail.add(track);
       }
     }
 
-    _applyMoodSort(queue, mood, seed);
-    if (queue.length > 1) {
-      queue.shuffle(_rng);
-      // Keep a strong opener — move seed near front.
-      queue.remove(seed);
-      queue.insert(_rng.nextInt(min(3, queue.length + 1)), seed);
+    _applyMoodSort(tail, mood);
+    if (tail.length > 1) {
+      tail.shuffle(_rng);
     }
+
+    final queue = <DeezerTrack>[seed, ...tail];
 
     final openerSpoken = PersonalDjSpeech.opener(
       seed: seed,
@@ -109,22 +109,15 @@ class PersonalDjService {
   }
 
   void _applyMoodSort(
-    List<DeezerTrack> queue,
+    List<DeezerTrack> tail,
     PersonalDjMood mood,
-    DeezerTrack seed,
   ) {
     switch (mood) {
       case PersonalDjMood.chill:
-        queue.sort((a, b) => (b.duration ?? 0).compareTo(a.duration ?? 0));
-        break;
+        tail.sort((a, b) => (b.duration ?? 0).compareTo(a.duration ?? 0));
       case PersonalDjMood.hype:
-        queue.sort((a, b) => (b.rank ?? 0).compareTo(a.rank ?? 0));
-        break;
+        tail.sort((a, b) => (b.rank ?? 0).compareTo(a.rank ?? 0));
       case PersonalDjMood.discover:
-        queue.removeWhere((t) => t.id == seed.id);
-        queue.shuffle(_rng);
-        queue.insert(0, seed);
-        break;
       case PersonalDjMood.mixed:
         break;
     }

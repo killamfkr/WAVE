@@ -96,11 +96,12 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
         mood: mood,
       );
 
-      await _player.playTracks(session.queue);
+      await _player.playTracks(session.queue, startIndex: 0);
 
       if (voiceEnabled) {
         await _speak(session.openerSpoken, mood: mood);
-        _lastSpokenTrackId = session.seed.id;
+        _lastSpokenTrackId =
+            _player.playerState.currentTrack?.id ?? session.seed.id;
       } else if (_player.playerState.status != PlaybackStatus.playing) {
         await _player.play();
       }

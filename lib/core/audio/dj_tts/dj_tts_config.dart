@@ -43,7 +43,7 @@ class DjTtsPresets {
   DjTtsPresets._();
 
   static const defaultDjInstructions =
-      'Speak like a confident Black male radio DJ. '
+      'Speak like a confident Black male radio DJ with a deep baritone voice. '
       'Natural, warm, and upbeat — never robotic.';
 
   /// ElevenLabs "Josh" — deep male voice.

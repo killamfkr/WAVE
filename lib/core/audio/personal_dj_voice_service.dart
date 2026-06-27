@@ -40,7 +40,7 @@ class PersonalDjVoiceService {
     try {
       await _fallbackTts.setLanguage('en-US');
       await _fallbackTts.setSpeechRate(0.56);
-      await _fallbackTts.setPitch(0.85);
+      await _fallbackTts.setPitch(0.78);
       await _fallbackTts.setVolume(1.0);
       await _fallbackTts.awaitSpeakCompletion(true);
 

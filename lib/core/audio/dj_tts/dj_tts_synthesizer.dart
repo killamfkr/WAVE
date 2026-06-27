@@ -66,7 +66,7 @@ class DjTtsSynthesizer {
         final bytes = await WaveEdgeTts(voice: voice).synthesize(
           line,
           rate: _edgeRateFor(mood),
-          pitch: '-4Hz',
+          pitch: '-10Hz',
         );
         if (bytes.isNotEmpty) {
           if (voice != WaveEdgeTts.defaultVoice) {
