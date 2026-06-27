@@ -2,7 +2,7 @@
   <img src="icon.png" width="128" height="128" alt="WAVE App Icon" />
   <h1>WAVE</h1>
   <p>A fast, cross-platform music streaming app built with Flutter.</p>
-  <p><strong>Latest release:</strong> <a href="https://github.com/killamfkr/WAVE/releases/latest">v1.1.0</a></p>
+  <p><strong>Latest release:</strong> <a href="https://github.com/killamfkr/WAVE/releases/latest">v1.1.1</a></p>
 </div>
 
 ---
@@ -14,7 +14,7 @@ WAVE is a modern music client for streaming, library management, and personalize
 ## Features
 
 - **High Quality Streaming**: Fast track loading with direct streaming, proactive URL refresh, and resilient playback recovery.
-- **Personal DJ**: Spotify-style personalized mixes built from your likes, recent plays, and similar tracks — with mood controls (Mixed, Chill, Hype, Discover) and on-screen DJ liner commentary.
+- **Personal DJ**: Spotify-style personalized mixes built from your likes, recent plays, and similar tracks — with mood controls (Mixed, Chill, Hype, Discover) and spoken on-screen DJ commentary.
 - **Autoplay Similar**: When a playlist or album ends, WAVE keeps going with similar music. Toggle AUTO from Now Playing or Settings → Playback.
 - **Repeat Modes**: Off, repeat all, or repeat one.
 - **Audio Focus**: Pauses automatically when another app takes audio focus or headphones are unplugged.
@@ -46,6 +46,7 @@ WAVE is a modern music client for streaming, library management, and personalize
 
 | Version | Highlights |
 |---------|------------|
+| **1.1.1** | Personal DJ voice — spoken commentary with music ducking |
 | **1.1.0** | Personal DJ — personalized mixes, mood controls, and liner commentary |
 | **1.0.9** | Pause when another app takes audio focus |
 | **1.0.8** | Playback stability — fixes CD-skip stutter during long sessions |

@@ -38,8 +38,8 @@ class _PersonalDjScreenState extends ConsumerState<PersonalDjScreen> {
                 theme: theme,
                 dj: dj,
                 player: player,
-                onEnd: () {
-                  ref.read(personalDjProvider.notifier).endSession();
+                onEnd: () async {
+                  await ref.read(personalDjProvider.notifier).endSession();
                   if (context.mounted) context.pop();
                 },
                 onMood: (mood) =>
@@ -143,7 +143,7 @@ class _StartDjViewState extends State<_StartDjView> {
                 const SizedBox(height: 12),
                 Text(
                   'A continuous mix built from your likes, recent plays, '
-                  'and similar tracks — with commentary as it flows.',
+                  'and similar tracks — with spoken DJ commentary as it flows.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: theme.onSurfaceMuted,
@@ -152,7 +152,9 @@ class _StartDjViewState extends State<_StartDjView> {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
+                _VoiceToggle(theme: theme, voiceEnabled: widget.dj.voiceEnabled),
+                const SizedBox(height: 24),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
@@ -279,19 +281,47 @@ class _ActiveDjView extends ConsumerWidget {
                           color: theme.onSurface.withValues(alpha: 0.06),
                         ),
                       ),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 400),
-                        child: Text(
-                          dj.liner ?? dj.opener ?? 'Building your mix…',
-                          key: ValueKey(dj.liner ?? dj.opener),
-                          style: TextStyle(
-                            color: theme.onSurface,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            height: 1.4,
-                            letterSpacing: -0.2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          if (dj.isSpeaking)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Row(
+                                children: <Widget>[
+                                  Icon(
+                                    PhosphorIconsFill.speakerHigh,
+                                    size: 14,
+                                    color: theme.accent,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'DJ IS SPEAKING',
+                                    style: TextStyle(
+                                      color: theme.accent,
+                                      fontSize: 10,
+                                      letterSpacing: 1.4,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 400),
+                            child: Text(
+                              dj.liner ?? dj.opener ?? 'Building your mix…',
+                              key: ValueKey(dj.liner ?? dj.opener),
+                              style: TextStyle(
+                                color: theme.onSurface,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                height: 1.4,
+                                letterSpacing: -0.2,
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
@@ -366,6 +396,11 @@ class _ActiveDjView extends ConsumerWidget {
                       ref.read(playerControlsProvider).seek(d),
                 ),
                 const SizedBox(height: 20),
+                _VoiceToggle(
+                  theme: theme,
+                  voiceEnabled: dj.voiceEnabled,
+                ),
+                const SizedBox(height: 16),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
@@ -481,6 +516,52 @@ class _TopBar extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _VoiceToggle extends ConsumerWidget {
+  const _VoiceToggle({
+    required this.theme,
+    required this.voiceEnabled,
+  });
+
+  final AppTheme theme;
+  final bool voiceEnabled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      onTap: () => ref.read(personalDjProvider.notifier).toggleVoice(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: theme.surface,
+          borderRadius: BorderRadius.circular(theme.cardRadius == 0 ? 0 : 20),
+          border: Border.all(color: theme.onSurface.withValues(alpha: 0.08)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              voiceEnabled
+                  ? PhosphorIconsFill.speakerHigh
+                  : PhosphorIconsFill.speakerSlash,
+              size: 18,
+              color: voiceEnabled ? theme.accent : theme.onSurfaceMuted,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              voiceEnabled ? 'DJ voice on' : 'DJ voice off',
+              style: TextStyle(
+                color: voiceEnabled ? theme.onSurface : theme.onSurfaceMuted,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
