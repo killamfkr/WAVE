@@ -6,6 +6,8 @@ import 'package:hive/hive.dart';
 
 import '../api/models/deezer_user.dart';
 import 'hive_boxes.dart';
+import '../sync/sync_metadata.dart';
+import '../sync/sync_trigger_providers.dart';
 
 /// Local device profile — not tied to Deezer or any remote auth.
 class LocalUserProfile {
@@ -111,6 +113,8 @@ class UserProfileNotifier extends Notifier<LocalUserProfile> {
     if (trimmed.isEmpty) return;
     state = state.copyWith(displayName: trimmed);
     await _persist();
+    await SyncMetadata.touchProfile();
+    ref.read(syncTriggerProvider.notifier).bump();
   }
 
   Future<void> setEmail(String? email) async {
@@ -120,6 +124,14 @@ class UserProfileNotifier extends Notifier<LocalUserProfile> {
     } else {
       state = state.copyWith(email: trimmed);
     }
+    await _persist();
+    await SyncMetadata.touchProfile();
+    ref.read(syncTriggerProvider.notifier).bump();
+  }
+
+  /// Applies a profile pulled from Google Drive without queuing an upload.
+  Future<void> applyFromSync(LocalUserProfile profile) async {
+    state = profile;
     await _persist();
   }
 }

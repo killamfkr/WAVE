@@ -9,6 +9,8 @@ import '../api/models/deezer_playlist.dart';
 import '../api/models/deezer_track.dart';
 import '../api/models/deezer_user.dart';
 import 'hive_boxes.dart';
+import '../sync/sync_metadata.dart';
+import '../sync/sync_trigger_providers.dart';
 import 'user_profile_providers.dart';
 
 /// Ensures complex models are recursively converted to Maps before Hive storage.
@@ -229,6 +231,8 @@ class UserPlaylistsNotifier extends Notifier<List<DeezerPlaylist>> {
     );
     await Hive.box<dynamic>(HiveBoxes.playlists).put(id.toString(), _deepJson(pl.toJson()));
     state = <DeezerPlaylist>[pl, ...state];
+    await SyncMetadata.touchPlaylist(id);
+    ref.read(syncTriggerProvider.notifier).bump();
     return pl;
   }
 
@@ -255,13 +259,42 @@ class UserPlaylistsNotifier extends Notifier<List<DeezerPlaylist>> {
     await box.clear();
     for (final p in list) {
       await box.put(p.id.toString(), _deepJson(p.toJson()));
+      await SyncMetadata.touchPlaylist(p.id);
     }
+    ref.read(syncTriggerProvider.notifier).bump();
   }
 
   Future<void> delete(int id) async {
+    await SyncMetadata.markPlaylistDeleted(id);
     await Hive.box<dynamic>(HiveBoxes.playlists).delete(id.toString());
     await Hive.box<dynamic>(HiveBoxes.playlistTracks).delete(id.toString());
     state = state.where((p) => p.id != id).toList(growable: false);
+    ref.read(syncTriggerProvider.notifier).bump();
+  }
+
+  Future<void> removeFromSync(int id) async {
+    await Hive.box<dynamic>(HiveBoxes.playlists).delete(id.toString());
+    await Hive.box<dynamic>(HiveBoxes.playlistTracks).delete(id.toString());
+    state = state.where((p) => p.id != id).toList(growable: false);
+    await SyncMetadata.clearPlaylistDeleted(id);
+  }
+
+  Future<void> upsertFromSync({
+    required DeezerPlaylist playlist,
+    required List<DeezerTrack> tracks,
+  }) async {
+    await Hive.box<dynamic>(HiveBoxes.playlists).put(
+      playlist.id.toString(),
+      _deepJson(playlist.toJson()),
+    );
+    await Hive.box<dynamic>(HiveBoxes.playlistTracks).put(
+      playlist.id.toString(),
+      tracks.map((t) => _deepJson(t.toJson())).toList(),
+    );
+
+    final without = state.where((p) => p.id != playlist.id).toList();
+    state = <DeezerPlaylist>[playlist, ...without];
+    ref.invalidate(localPlaylistTracksProvider);
   }
 
   Future<void> updatePlaylist(int id, {required String title, String? description}) async {
@@ -280,6 +313,8 @@ class UserPlaylistsNotifier extends Notifier<List<DeezerPlaylist>> {
     final box = Hive.box<dynamic>(HiveBoxes.playlists);
     final target = list.firstWhere((p) => p.id == id);
     await box.put(id.toString(), _deepJson(target.toJson()));
+    await SyncMetadata.touchPlaylist(id);
+    ref.read(syncTriggerProvider.notifier).bump();
   }
 }
 
@@ -347,6 +382,8 @@ class LocalPlaylistTracksNotifier extends Notifier<Map<int, List<DeezerTrack>>> 
       // We manually invalidate UserPlaylistsNotifier since we bypassed its methods
       ref.invalidate(userPlaylistsProvider); 
     }
+    await SyncMetadata.touchPlaylist(playlistId);
+    ref.read(syncTriggerProvider.notifier).bump();
   }
 
   Future<void> removeTrack(int playlistId, int trackId) async {
@@ -362,6 +399,8 @@ class LocalPlaylistTracksNotifier extends Notifier<Map<int, List<DeezerTrack>>> 
     await box.put(playlistId.toString(), newList.map((t) => _deepJson(t.toJson())).toList());
     
     ref.invalidate(userPlaylistsProvider);
+    await SyncMetadata.touchPlaylist(playlistId);
+    ref.read(syncTriggerProvider.notifier).bump();
   }
 
   Future<void> reorderTrack(int playlistId, int oldIndex, int newIndex) async {
@@ -378,6 +417,8 @@ class LocalPlaylistTracksNotifier extends Notifier<Map<int, List<DeezerTrack>>> 
     
     final box = Hive.box<dynamic>(HiveBoxes.playlistTracks);
     await box.put(playlistId.toString(), newList.map((t) => _deepJson(t.toJson())).toList());
+    await SyncMetadata.touchPlaylist(playlistId);
+    ref.read(syncTriggerProvider.notifier).bump();
   }
 }
 

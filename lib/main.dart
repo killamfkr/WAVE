@@ -9,7 +9,8 @@ import 'package:window_manager/window_manager.dart';
 
 import 'core/audio/media_kit_music_player_service.dart';
 import 'core/audio/music_player_service.dart';
-import 'core/router/app_router.dart';
+import 'core/sync/drive_sync_bootstrap.dart';
+import 'core/sync/drive_sync_config.dart';
 import 'core/storage/hive_boxes.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_notifier.dart';
@@ -30,6 +31,7 @@ Future<void> main() async {
   // Load configuration and check API availability
   await DeezerApiClient.loadEnv();
   await LastfmApiClient.loadEnv();
+  await DriveSyncConfig.loadEnv();
   await DeezerApiClient.checkGeoRestriction();
   
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
@@ -99,6 +101,7 @@ class WaveApp extends ConsumerWidget {
             children: <Widget>[
               ?child,
               const Positioned.fill(child: ThemeMorphOverlay()),
+              const DriveSyncBootstrap(),
             ],
           );
         },

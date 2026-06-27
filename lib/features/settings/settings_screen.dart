@@ -8,6 +8,8 @@ import '../../core/router/app_router.dart';
 import '../../core/storage/library_providers.dart';
 import '../../core/storage/settings_providers.dart';
 import '../../core/storage/user_profile_providers.dart';
+import '../../core/sync/drive_sync_config.dart';
+import '../../core/sync/drive_sync_providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/themes.dart';
 import '../../widgets/snap_horizontal_list.dart';
@@ -182,9 +184,13 @@ class _AccountSection extends ConsumerWidget {
     final theme = AppThemeScope.of(context);
     final profile = ref.watch(userProfileProvider);
     final playlistCount = ref.watch(userPlaylistsProvider).length;
+    final driveSync = ref.watch(driveSyncProvider);
     final playlistLabel = playlistCount == 1
         ? '1 saved playlist'
         : '$playlistCount saved playlists';
+    final subtitle = driveSync.isSignedIn
+        ? _syncSubtitle(driveSync)
+        : playlistLabel;
 
     return _Card(
       child: GestureDetector(
@@ -192,20 +198,9 @@ class _AccountSection extends ConsumerWidget {
         onTap: () => _openProfileEditor(context, ref),
         child: Row(
           children: <Widget>[
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: theme.accent.withValues(alpha: 0.2),
-                border: Border.all(color: theme.accent, width: 2),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                PhosphorIconsFill.user,
-                color: theme.accent,
-                size: 26,
-              ),
+            _AccountAvatar(
+              photoUrl: driveSync.accountPhotoUrl,
+              theme: theme,
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -213,7 +208,7 @@ class _AccountSection extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    profile.displayName,
+                    driveSync.accountName ?? profile.displayName,
                     style: TextStyle(
                       color: theme.onSurface,
                       fontSize: 16,
@@ -222,13 +217,22 @@ class _AccountSection extends ConsumerWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    playlistLabel,
+                    subtitle,
                     style: TextStyle(
                       color: theme.onSurfaceMuted,
                       fontSize: 12,
                     ),
                   ),
-                  if (profile.email != null) ...<Widget>[
+                  if (driveSync.accountEmail != null) ...<Widget>[
+                    const SizedBox(height: 2),
+                    Text(
+                      driveSync.accountEmail!,
+                      style: TextStyle(
+                        color: theme.onSurfaceMuted.withValues(alpha: 0.8),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ] else if (profile.email != null) ...<Widget>[
                     const SizedBox(height: 2),
                     Text(
                       profile.email!,
@@ -248,6 +252,59 @@ class _AccountSection extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  String _syncSubtitle(DriveSyncState driveSync) {
+    if (driveSync.phase == DriveSyncPhase.syncing) {
+      return 'Syncing playlists to Google Drive…';
+    }
+    if (driveSync.lastSyncedAt != null) {
+      final local = driveSync.lastSyncedAt!.toLocal();
+      final time =
+          '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+      return 'Synced to hidden Drive · $time';
+    }
+    return 'Signed in · hidden Google Drive sync';
+  }
+}
+
+class _AccountAvatar extends StatelessWidget {
+  const _AccountAvatar({required this.photoUrl, required this.theme});
+  final String? photoUrl;
+  final AppTheme theme;
+
+  @override
+  Widget build(BuildContext context) {
+    if (photoUrl != null && photoUrl!.isNotEmpty) {
+      return ClipOval(
+        child: Image.network(
+          photoUrl!,
+          width: 56,
+          height: 56,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _fallback(),
+        ),
+      );
+    }
+    return _fallback();
+  }
+
+  Widget _fallback() {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: theme.accent.withValues(alpha: 0.2),
+        border: Border.all(color: theme.accent, width: 2),
+      ),
+      alignment: Alignment.center,
+      child: Icon(
+        PhosphorIconsFill.user,
+        color: theme.accent,
+        size: 26,
       ),
     );
   }
@@ -301,6 +358,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
   Widget build(BuildContext context) {
     final theme = AppThemeScope.of(context);
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final driveSync = ref.watch(driveSyncProvider);
     final playlistLabel = widget.playlistCount == 1
         ? '1 playlist saved on this device'
         : '${widget.playlistCount} playlists saved on this device';
@@ -344,14 +402,110 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'A local profile for your library. No login required — playlists stay on this device.',
+                  'Sign in with Google to sync your profile and playlists to a hidden app folder in your Google Drive. No WAVE server — your data stays in your Google account.',
                   style: TextStyle(
                     color: theme.onSurfaceMuted,
                     fontSize: 13,
                     height: 1.4,
                   ),
                 ),
-                const SizedBox(height: 20),
+                if (!DriveSyncConfig.isConfigured) ...<Widget>[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Add GOOGLE_WEB_CLIENT_ID to .env to enable sync.',
+                    style: TextStyle(
+                      color: theme.accent.withValues(alpha: 0.9),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                if (driveSync.errorMessage != null) ...<Widget>[
+                  const SizedBox(height: 10),
+                  Text(
+                    driveSync.errorMessage!,
+                    style: TextStyle(
+                      color: theme.accent,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                if (driveSync.isSignedIn) ...<Widget>[
+                  OutlinedButton.icon(
+                    onPressed: driveSync.phase == DriveSyncPhase.syncing
+                        ? null
+                        : () => ref.read(driveSyncProvider.notifier).syncNow(),
+                    icon: Icon(
+                      PhosphorIconsRegular.arrowsClockwise,
+                      size: 18,
+                      color: theme.accent,
+                    ),
+                    label: Text(
+                      driveSync.phase == DriveSyncPhase.syncing
+                          ? 'Syncing…'
+                          : 'Sync now',
+                      style: TextStyle(
+                        color: theme.accent,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: theme.accent.withValues(alpha: 0.4)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: () =>
+                        ref.read(driveSyncProvider.notifier).signOut(),
+                    child: Text(
+                      'Sign out of Google',
+                      style: TextStyle(color: theme.onSurfaceMuted),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ] else ...<Widget>[
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: driveSync.phase == DriveSyncPhase.signingIn ||
+                              !DriveSyncConfig.isConfigured
+                          ? null
+                          : () => ref.read(driveSyncProvider.notifier).signIn(),
+                      icon: driveSync.phase == DriveSyncPhase.signingIn
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: theme.accent,
+                              ),
+                            )
+                          : Icon(
+                              PhosphorIconsRegular.cloudArrowUp,
+                              size: 18,
+                              color: theme.onSurface,
+                            ),
+                      label: Text(
+                        driveSync.phase == DriveSyncPhase.signingIn
+                            ? 'Signing in…'
+                            : 'Continue with Google',
+                        style: TextStyle(
+                          color: theme.onSurface,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: BorderSide(
+                          color: theme.onSurface.withValues(alpha: 0.15),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 Text(
                   'DISPLAY NAME',
                   style: TextStyle(
