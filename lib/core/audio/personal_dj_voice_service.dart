@@ -2,12 +2,12 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:audio_session/audio_session.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../api/models/player_state.dart';
 import '../utils/app_logger.dart';
 import 'music_player_service.dart';
 import 'personal_dj_service.dart';
@@ -37,8 +37,8 @@ class PersonalDjVoiceService {
   Future<void> _initFallbackTts() async {
     try {
       await _fallbackTts.setLanguage('en-US');
-      await _fallbackTts.setSpeechRate(0.48);
-      await _fallbackTts.setPitch(0.95);
+      await _fallbackTts.setSpeechRate(0.56);
+      await _fallbackTts.setPitch(0.92);
       await _fallbackTts.setVolume(1.0);
       await _fallbackTts.awaitSpeakCompletion(true);
 
@@ -66,6 +66,8 @@ class PersonalDjVoiceService {
           if (name.contains('neural')) score += 50;
           if (name.contains('enhanced')) score += 40;
           if (locale.contains('us')) score += 10;
+          if (_isMaleVoiceName(name)) score += 35;
+          if (_isFemaleVoiceName(name)) score -= 40;
           if (score > bestScore) {
             bestScore = score;
             best = voice;
@@ -87,7 +89,6 @@ class PersonalDjVoiceService {
   Future<void> speak(
     String text, {
     MusicPlayerService? player,
-    bool duck = false,
     PersonalDjMood mood = PersonalDjMood.mixed,
   }) async {
     final line = text.trim();
@@ -95,16 +96,16 @@ class PersonalDjVoiceService {
 
     await stop();
 
-    double? savedVolume;
-    if (duck && player != null) {
-      savedVolume = player.playerState.volume;
-      await player.setVolume((savedVolume * 0.1).clamp(0.0, 1.0));
+    var resumeMusic = false;
+    if (player != null) {
+      resumeMusic = player.playerState.status == PlaybackStatus.playing;
+      if (resumeMusic) {
+        await player.pause();
+      }
     }
 
     _speaking = true;
     try {
-      await _activateVoiceSession();
-
       final bytes = await _edge.synthesize(
         line,
         rate: _rateFor(mood),
@@ -123,31 +124,9 @@ class PersonalDjVoiceService {
     } finally {
       _speaking = false;
       _playbackDone = null;
-      if (duck && player != null && savedVolume != null) {
-        await player.setVolume(savedVolume);
+      if (resumeMusic && player != null) {
+        await player.play();
       }
-    }
-  }
-
-  Future<void> _activateVoiceSession() async {
-    try {
-      final session = await AudioSession.instance;
-      await session.configure(AudioSessionConfiguration(
-        avAudioSessionCategory: AVAudioSessionCategory.playback,
-        avAudioSessionCategoryOptions:
-            AVAudioSessionCategoryOptions.duckOthers |
-            AVAudioSessionCategoryOptions.mixWithOthers,
-        avAudioSessionMode: AVAudioSessionMode.spokenAudio,
-        androidAudioAttributes: const AndroidAudioAttributes(
-          contentType: AndroidAudioContentType.speech,
-          usage: AndroidAudioUsage.assistanceNavigationGuidance,
-        ),
-        androidAudioFocusGainType:
-            AndroidAudioFocusGainType.gainTransientMayDuck,
-      ));
-      await session.setActive(true);
-    } catch (e) {
-      appLogger.w('DJ voice session setup failed: $e');
     }
   }
 
@@ -185,11 +164,41 @@ class PersonalDjVoiceService {
   }
 
   String _rateFor(PersonalDjMood mood) => switch (mood) {
-        PersonalDjMood.chill => '-6%',
-        PersonalDjMood.hype => '+14%',
-        PersonalDjMood.discover => '+2%',
-        PersonalDjMood.mixed => '+6%',
+        PersonalDjMood.chill => '+12%',
+        PersonalDjMood.hype => '+26%',
+        PersonalDjMood.discover => '+16%',
+        PersonalDjMood.mixed => '+20%',
       };
+
+  bool _isMaleVoiceName(String name) => <String>[
+        'guy',
+        'jason',
+        'brian',
+        'davis',
+        'daniel',
+        'eric',
+        'andrew',
+        'christopher',
+        'tony',
+        'steffan',
+        'brandon',
+        'ryan',
+        'roger',
+      ].any(name.contains);
+
+  bool _isFemaleVoiceName(String name) => <String>[
+        'jenny',
+        'aria',
+        'sara',
+        'michelle',
+        'emma',
+        'ana',
+        'natasha',
+        'ava',
+        'jane',
+        'nancy',
+        'female',
+      ].any(name.contains);
 
   Future<String> _writeTempMp3(Uint8List bytes) async {
     final dir = await getTemporaryDirectory();

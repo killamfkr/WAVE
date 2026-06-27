@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/models/deezer_track.dart';
+import '../api/models/player_state.dart';
 import '../storage/library_providers.dart';
 import '../storage/recently_played.dart';
 import '../storage/settings_providers.dart';
@@ -93,12 +94,14 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
         mood: mood,
       );
 
-      if (voiceEnabled) {
-        await _speak(session.openerSpoken, duck: false, mood: mood);
-        _lastSpokenTrackId = session.seed.id;
-      }
-
       await _player.playTracks(session.queue);
+
+      if (voiceEnabled) {
+        await _speak(session.openerSpoken, mood: mood);
+        _lastSpokenTrackId = session.seed.id;
+      } else if (_player.playerState.status != PlaybackStatus.playing) {
+        await _player.play();
+      }
       return true;
     } catch (e) {
       state = state.copyWith(
@@ -126,7 +129,7 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
       likedIds: _likedIds,
       mood: state.mood,
     );
-    _speak(spoken, duck: true, trackId: track.id, mood: state.mood);
+    _speak(spoken, trackId: track.id, mood: state.mood);
   }
 
   Future<void> toggleVoice() async {
@@ -138,17 +141,12 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
     }
     state = state.copyWith(voiceEnabled: next);
     if (_lastSpokenScript != null && state.isActive) {
-      await _speak(
-        _lastSpokenScript!,
-        duck: _player.playerState.currentTrack != null,
-        mood: state.mood,
-      );
+      await _speak(_lastSpokenScript!, mood: state.mood);
     }
   }
 
   Future<void> _speak(
     String text, {
-    bool duck = false,
     int? trackId,
     PersonalDjMood mood = PersonalDjMood.mixed,
   }) async {
@@ -159,8 +157,7 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
     try {
       await _voice.speak(
         text,
-        player: duck ? _player : null,
-        duck: duck,
+        player: _player,
         mood: mood,
       );
       if (trackId != null) {
