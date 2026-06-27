@@ -15,7 +15,7 @@ import '../../core/storage/library_providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/downloads/download_providers.dart';
 import '../../core/utils/app_breakpoints.dart';
-import '../../main.dart' show scaffoldMessengerKey;
+import '../../core/app_messenger.dart' show scaffoldMessengerKey;
 import '../../widgets/content_cards.dart';
 import '../../widgets/context_menu.dart';
 import '../../widgets/player/add_to_playlist_sheet.dart';

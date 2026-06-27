@@ -13,7 +13,7 @@ import '../../core/audio/player_providers.dart';
 import '../../core/storage/library_providers.dart';
 import '../../core/utils/playlist_exchange.dart';
 import '../../core/theme/app_theme.dart';
-import '../../main.dart' show scaffoldMessengerKey;
+import '../../core/app_messenger.dart' show scaffoldMessengerKey;
 import '../../widgets/detail_track_row.dart';
 import '../../widgets/inline_error.dart';
 import '../../widgets/play_shuffle_pair.dart';

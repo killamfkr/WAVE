@@ -34,13 +34,16 @@ WAVE is a modern music client for streaming, library management, and personalize
 
 <div align="center">
   <h3>Homescreen</h3>
-  <img src="homescreenshot.png" width="600" alt="Homescreen" />
+  <img src="homescreenshot.png" width="600" alt="Homescreen with Personal DJ card" />
+  
+  <h3>Personal DJ</h3>
+  <img src="djscreenshot.png" width="600" alt="Personal DJ screen" />
   
   <h3>Now Playing</h3>
   <img src="playingscreenshot.png" width="600" alt="Now Playing Screen" />
   
   <h3>Settings</h3>
-  <img src="settingsscreenshot.png" width="600" alt="Settings Screen" />
+  <img src="settingsscreenshot.png" width="600" alt="Settings with Personal DJ Voice" />
 </div>
 
 ## Recent Updates
