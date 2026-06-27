@@ -53,7 +53,7 @@ class WaveCloudSyncService {
   void _requireConfig() {
     if (!isConfigured) {
       throw const WaveCloudException(
-        'Add PLAYTORRIO_SUPABASE_URL and PLAYTORRIO_SUPABASE_ANON_KEY to .env',
+        'Cloud sync is not configured in this build.',
       );
     }
   }

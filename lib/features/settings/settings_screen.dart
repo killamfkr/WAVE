@@ -462,17 +462,6 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
                     height: 1.4,
                   ),
                 ),
-                if (!SupabaseSyncConfig.isConfigured) ...<Widget>[
-                  const SizedBox(height: 10),
-                  Text(
-                    'Add PLAYTORRIO_SUPABASE_URL and PLAYTORRIO_SUPABASE_ANON_KEY to .env.',
-                    style: TextStyle(
-                      color: theme.accent.withValues(alpha: 0.9),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
                 if (cloudSync.errorMessage != null) ...<Widget>[
                   const SizedBox(height: 10),
                   Text(

@@ -9,6 +9,11 @@ class SupabaseSyncConfig {
   static const String _envUrlKey = 'PLAYTORRIO_SUPABASE_URL';
   static const String _envAnonKey = 'PLAYTORRIO_SUPABASE_ANON_KEY';
 
+  /// Same defaults as PlayTorrioV2 / Stories (public anon key, safe in client apps).
+  static const String defaultUrl = 'https://lxapazzlduwwecatebti.supabase.co';
+  static const String defaultAnonKey =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx4YXBhenpsZHV3d2VjYXRlYnRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyOTI2NDQsImV4cCI6MjA5Mjg2ODY0NH0.a9e7zUEdWDmf4Qor-rbYZ6G0sMTEYcfKnwTrXjVrBWY';
+
   static String? url;
   static String? anonKey;
 
@@ -22,10 +27,13 @@ class SupabaseSyncConfig {
   }
 
   static Future<void> loadEnv() async {
-    url = const String.fromEnvironment(_envUrlKey);
-    anonKey = const String.fromEnvironment(_envAnonKey);
+    final fromDefineUrl = const String.fromEnvironment(_envUrlKey);
+    final fromDefineAnon = const String.fromEnvironment(_envAnonKey);
 
-    if (url != null && url!.isNotEmpty && anonKey != null && anonKey!.isNotEmpty) {
+    url = fromDefineUrl.isNotEmpty ? fromDefineUrl : null;
+    anonKey = fromDefineAnon.isNotEmpty ? fromDefineAnon : null;
+
+    if (isConfigured) {
       appLogger.i('Loaded Supabase config from dart-define');
       return;
     }
@@ -45,9 +53,14 @@ class SupabaseSyncConfig {
       }
       if (isConfigured) {
         appLogger.i('Loaded Supabase config from .env');
+        return;
       }
     } catch (e) {
       appLogger.w('Could not load Supabase config from .env: $e');
     }
+
+    url = defaultUrl;
+    anonKey = defaultAnonKey;
+    appLogger.i('Using built-in PlayTorrio Supabase defaults');
   }
 }
