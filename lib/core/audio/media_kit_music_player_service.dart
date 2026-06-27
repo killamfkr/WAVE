@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:media_kit/media_kit.dart' as mk;
 
@@ -45,6 +46,7 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
     unawaited(_configurePlayer(_playerA));
     unawaited(_configurePlayer(_playerB));
     _loadInitialSettings();
+    unawaited(_initAudioSession());
   }
 
   static const mk.PlayerConfiguration _playerConfig = mk.PlayerConfiguration(
@@ -80,6 +82,59 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
   DateTime? _lastRecoveryAt;
   static const Duration _recoveryCooldown = Duration(seconds: 20);
   static const Duration _fallbackStreamRefresh = Duration(minutes: 45);
+  StreamSubscription<AudioInterruptionEvent>? _interruptionSub;
+  StreamSubscription<void>? _becomingNoisySub;
+  bool _pausedByInterruption = false;
+
+  Future<void> _initAudioSession() async {
+    try {
+      final session = await AudioSession.instance;
+      _interruptionSub = session.interruptionEventStream.listen((event) {
+        if (event.begin) {
+          if (_state.status == PlaybackStatus.playing) {
+            _pausedByInterruption = true;
+            unawaited(pause());
+          }
+          return;
+        }
+
+        if (!_pausedByInterruption) return;
+        switch (event.type) {
+          case AudioInterruptionType.pause:
+          case AudioInterruptionType.duck:
+            if (_state.currentTrack != null &&
+                _state.status != PlaybackStatus.playing) {
+              unawaited(play());
+            }
+            break;
+          case AudioInterruptionType.unknown:
+            break;
+        }
+        _pausedByInterruption = false;
+      });
+
+      _becomingNoisySub = session.becomingNoisyEventStream.listen((_) {
+        if (_state.status == PlaybackStatus.playing) {
+          _pausedByInterruption = false;
+          unawaited(pause());
+        }
+      });
+    } catch (e, st) {
+      appLogger.w('Failed to bind audio session interruptions', error: e, stackTrace: st);
+    }
+  }
+
+  Future<void> _activateAudioSession() async {
+    try {
+      final session = await AudioSession.instance;
+      final activated = await session.setActive(true);
+      if (!activated) {
+        appLogger.w('Audio session activation was denied');
+      }
+    } catch (e) {
+      appLogger.w('Failed to activate audio session: $e');
+    }
+  }
 
   Future<void> _configurePlayer(mk.Player player) async {
     try {
@@ -134,6 +189,9 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
     bool play = true,
     Duration? seekTo,
   }) async {
+    if (play) {
+      await _activateAudioSession();
+    }
     await player.open(source.toMedia(), play: play);
     await _applyEqualizerToPlayer(player);
     if (seekTo != null && seekTo > Duration.zero) {
@@ -838,10 +896,26 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
   }
 
   @override
-  Future<void> play() => _activePlayer.play();
+  Future<void> play() async {
+    _pausedByInterruption = false;
+    await _activateAudioSession();
+    await _activePlayer.play();
+  }
 
   @override
-  Future<void> pause() => _activePlayer.pause();
+  Future<void> pause() async {
+    await _activePlayer.pause();
+  }
+
+  @override
+  Future<void> togglePlayPause() async {
+    if (_activePlayer.state.playing) {
+      _pausedByInterruption = false;
+      await pause();
+    } else {
+      await play();
+    }
+  }
 
   @override
   Future<void> stop() async {
@@ -865,9 +939,6 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
 
   @override
   Future<void> skipToPrevious() async => skipPrevious();
-
-  @override
-  Future<void> togglePlayPause() => _activePlayer.playOrPause();
 
   @override
   Future<void> skipNext() async {
@@ -1073,6 +1144,8 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
   Future<void> dispose() async {
     _crossfadeTimer?.cancel();
     _cancelStreamRefresh();
+    await _interruptionSub?.cancel();
+    await _becomingNoisySub?.cancel();
     await _playerA.dispose();
     await _playerB.dispose();
     _resolver.dispose();
