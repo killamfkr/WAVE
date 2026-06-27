@@ -30,6 +30,12 @@ jobs:
           echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
           echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" >> .env
           echo "LASTFM_SHARED_SECRET=${{ secrets.LASTFM_SHARED_SECRET }}" >> .env
+          echo "PLAYTORRIO_SUPABASE_URL=${{ secrets.PLAYTORRIO_SUPABASE_URL }}" >> .env
+          echo "PLAYTORRIO_SUPABASE_ANON_KEY=${{ secrets.PLAYTORRIO_SUPABASE_ANON_KEY }}" >> .env
+          echo "GITHUB_UPDATE_REPO=killamfkr/WAVE" >> .env
+          echo "PLAYTORRIO_SUPABASE_URL=${{ secrets.PLAYTORRIO_SUPABASE_URL }}" >> .env
+          echo "PLAYTORRIO_SUPABASE_ANON_KEY=${{ secrets.PLAYTORRIO_SUPABASE_ANON_KEY }}" >> .env
+          echo "GITHUB_UPDATE_REPO=killamfkr/WAVE" >> .env
 
       - run: flutter pub get
       - run: flutter build windows --release
@@ -78,6 +84,9 @@ jobs:
           echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
           echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" >> .env
           echo "LASTFM_SHARED_SECRET=${{ secrets.LASTFM_SHARED_SECRET }}" >> .env
+          echo "PLAYTORRIO_SUPABASE_URL=${{ secrets.PLAYTORRIO_SUPABASE_URL }}" >> .env
+          echo "PLAYTORRIO_SUPABASE_ANON_KEY=${{ secrets.PLAYTORRIO_SUPABASE_ANON_KEY }}" >> .env
+          echo "GITHUB_UPDATE_REPO=killamfkr/WAVE" >> .env
 
       - run: flutter pub get
       - run: flutter build linux --release
@@ -145,6 +154,9 @@ jobs:
           echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
           echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" >> .env
           echo "LASTFM_SHARED_SECRET=${{ secrets.LASTFM_SHARED_SECRET }}" >> .env
+          echo "PLAYTORRIO_SUPABASE_URL=${{ secrets.PLAYTORRIO_SUPABASE_URL }}" >> .env
+          echo "PLAYTORRIO_SUPABASE_ANON_KEY=${{ secrets.PLAYTORRIO_SUPABASE_ANON_KEY }}" >> .env
+          echo "GITHUB_UPDATE_REPO=killamfkr/WAVE" >> .env
 
       - run: flutter pub get
       - run: flutter build macos --release
@@ -198,6 +210,9 @@ jobs:
           echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
           echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" >> .env
           echo "LASTFM_SHARED_SECRET=${{ secrets.LASTFM_SHARED_SECRET }}" >> .env
+          echo "PLAYTORRIO_SUPABASE_URL=${{ secrets.PLAYTORRIO_SUPABASE_URL }}" >> .env
+          echo "PLAYTORRIO_SUPABASE_ANON_KEY=${{ secrets.PLAYTORRIO_SUPABASE_ANON_KEY }}" >> .env
+          echo "GITHUB_UPDATE_REPO=killamfkr/WAVE" >> .env
 
       - run: arch -x86_64 flutter pub get
       - run: arch -x86_64 flutter build macos --release
@@ -247,6 +262,9 @@ jobs:
           echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
           echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" >> .env
           echo "LASTFM_SHARED_SECRET=${{ secrets.LASTFM_SHARED_SECRET }}" >> .env
+          echo "PLAYTORRIO_SUPABASE_URL=${{ secrets.PLAYTORRIO_SUPABASE_URL }}" >> .env
+          echo "PLAYTORRIO_SUPABASE_ANON_KEY=${{ secrets.PLAYTORRIO_SUPABASE_ANON_KEY }}" >> .env
+          echo "GITHUB_UPDATE_REPO=killamfkr/WAVE" >> .env
 
       - run: flutter pub get
       - run: flutter build ios --release --no-codesign
@@ -263,10 +281,78 @@ jobs:
           name: WAVE-iOS
           path: WAVE-iOS.ipa
 
+  # ─── Android (signed APK) ────────────────────────────────────────────────
+  android:
+    name: Android (Signed APK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+
+      - name: Create .env from secret
+        run: |
+          echo "DEEZER_PROXY_URL=${{ secrets.DEEZER_PROXY_URL }}" > .env
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" >> .env
+          echo "LASTFM_SHARED_SECRET=${{ secrets.LASTFM_SHARED_SECRET }}" >> .env
+          echo "PLAYTORRIO_SUPABASE_URL=${{ secrets.PLAYTORRIO_SUPABASE_URL }}" >> .env
+          echo "PLAYTORRIO_SUPABASE_ANON_KEY=${{ secrets.PLAYTORRIO_SUPABASE_ANON_KEY }}" >> .env
+          echo "GITHUB_UPDATE_REPO=killamfkr/WAVE" >> .env
+          echo "PLAYTORRIO_SUPABASE_URL=${{ secrets.PLAYTORRIO_SUPABASE_URL }}" >> .env
+          echo "PLAYTORRIO_SUPABASE_ANON_KEY=${{ secrets.PLAYTORRIO_SUPABASE_ANON_KEY }}" >> .env
+          echo "GITHUB_UPDATE_REPO=killamfkr/WAVE" >> .env
+
+      - name: Configure release signing
+        env:
+          WAVE_KEYSTORE_BASE64: ${{ secrets.WAVE_KEYSTORE_BASE64 }}
+          WAVE_KEYSTORE_PASSWORD: ${{ secrets.WAVE_KEYSTORE_PASSWORD }}
+          WAVE_KEY_ALIAS: ${{ secrets.WAVE_KEY_ALIAS }}
+          WAVE_KEY_PASSWORD: ${{ secrets.WAVE_KEY_PASSWORD }}
+        run: |
+          if [ -n "$WAVE_KEYSTORE_BASE64" ]; then
+            echo "$WAVE_KEYSTORE_BASE64" | base64 -d > android/app/wave-release.keystore
+            cat > android/key.properties <<EOF
+          storePassword=${WAVE_KEYSTORE_PASSWORD}
+          keyPassword=${WAVE_KEY_PASSWORD}
+          keyAlias=${WAVE_KEY_ALIAS:-wave}
+          storeFile=wave-release.keystore
+          EOF
+          else
+            echo "No WAVE_KEYSTORE_BASE64 secret — building with debug signing."
+          fi
+
+      - run: flutter pub get
+      - run: flutter build apk --release --split-per-abi
+
+      - name: Rename APKs for updater
+        run: |
+          cd build/app/outputs/flutter-apk
+          cp app-armeabi-v7a-release.apk WAVE-armeabi-v7a-release.apk || true
+          cp app-arm64-v8a-release.apk WAVE-arm64-v8a-release.apk || true
+          cp app-x86_64-release.apk WAVE-x86_64-release.apk || true
+          cp app-release.apk WAVE-android-universal-release.apk 2>/dev/null || \
+            cp app-arm64-v8a-release.apk WAVE-android-universal-release.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WAVE-Android
+          path: |
+            build/app/outputs/flutter-apk/WAVE-*.apk
+            build/app/outputs/flutter-apk/app-*-release.apk
+
   # ─── Create GitHub Release ───────────────────────────────────────────────
   release:
     name: Create Release
-    needs: [windows, linux-x64, macos-arm64, macos-intel, ios]
+    needs: [windows, linux-x64, macos-arm64, macos-intel, ios, android]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
@@ -287,3 +373,5 @@ jobs:
             WAVE-macOS-intel/*.dmg
             WAVE-macOS-intel/*.zip
             WAVE-iOS/*.ipa
+            WAVE-Android/WAVE-*.apk
+            WAVE-Android/app-*-release.apk

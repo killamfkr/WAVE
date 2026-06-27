@@ -1,0 +1,5 @@
+# Copy to android/key.properties (never commit). Used for release APK signing.
+storePassword=your-store-password
+keyPassword=your-key-password
+keyAlias=wave
+storeFile=wave-release.keystore

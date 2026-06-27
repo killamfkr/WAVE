@@ -11,12 +11,14 @@ import 'core/audio/media_kit_music_player_service.dart';
 import 'core/audio/music_player_service.dart';
 import 'core/sync/cloud_sync_bootstrap.dart';
 import 'core/sync/supabase_sync_config.dart';
+import 'core/router/app_router.dart';
 import 'core/storage/hive_boxes.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_notifier.dart';
 import 'core/api/deezer_api_client.dart';
 import 'core/api/lastfm_api_client.dart';
 import 'core/audio/local_proxy.dart';
+import 'services/app_updater_service.dart';
 import 'widgets/theme_morph.dart';
 
 late final MediaKitMusicPlayerService _playerService;
@@ -32,6 +34,7 @@ Future<void> main() async {
   await DeezerApiClient.loadEnv();
   await LastfmApiClient.loadEnv();
   await SupabaseSyncConfig.loadEnv();
+  await AppUpdaterService.loadEnv();
   await DeezerApiClient.checkGeoRestriction();
   
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {

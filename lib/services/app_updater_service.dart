@@ -1,14 +1,38 @@
 import 'dart:io';
 import 'dart:ffi' show Abi;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AppUpdaterService {
-  static const String githubRepo = 'ayman708-UX/WAVE';
-  static const String githubApiUrl = 'https://api.github.com/repos/$githubRepo/releases/latest';
+  /// Default: this fork. Override via `.env` (`GITHUB_UPDATE_REPO=owner/repo`).
+  static const String _defaultGithubRepo = 'killamfkr/WAVE';
+  static String? _githubRepoOverride;
+
+  static String get githubRepo => _githubRepoOverride ?? _defaultGithubRepo;
+
+  static String get githubApiUrl =>
+      'https://api.github.com/repos/$githubRepo/releases/latest';
+
+  static Future<void> loadEnv() async {
+    try {
+      final content = await rootBundle.loadString('.env');
+      for (final line in content.split('\n')) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty || trimmed.startsWith('#')) continue;
+        final parts = trimmed.split('=');
+        if (parts.length >= 2 && parts[0].trim() == 'GITHUB_UPDATE_REPO') {
+          final value = parts.sublist(1).join('=').trim();
+          if (value.isNotEmpty) {
+            _githubRepoOverride = value;
+          }
+        }
+      }
+    } catch (_) {}
+  }
   
   Future<UpdateInfo?> checkForUpdates() async {
     try {
