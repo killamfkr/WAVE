@@ -66,6 +66,8 @@ class PersonalDjVoiceService {
           if (name.contains('neural')) score += 50;
           if (name.contains('enhanced')) score += 40;
           if (locale.contains('us')) score += 10;
+          if (name.contains('davis')) score += 70;
+          if (name.contains('tony')) score += 55;
           if (_isMaleVoiceName(name)) score += 35;
           if (_isFemaleVoiceName(name)) score -= 40;
           if (score > bestScore) {

@@ -10,7 +10,7 @@ import 'package:crypto/crypto.dart';
 /// Edge TTS client with correct binary audio frame handling.
 class WaveEdgeTts {
   WaveEdgeTts({
-    this.voice = 'en-US-GuyNeural',
+    this.voice = 'en-US-DavisNeural',
     this.voiceLocale = 'en-US',
   });
 
