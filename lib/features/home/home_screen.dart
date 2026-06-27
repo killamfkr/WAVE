@@ -9,6 +9,7 @@ import '../../core/api/deezer_api_client.dart';
 import '../../core/api/models/deezer_album.dart';
 import '../../core/api/models/deezer_artist.dart';
 import '../../core/api/models/deezer_playlist.dart';
+import '../../core/audio/personal_dj_providers.dart';
 import '../../core/audio/player_providers.dart';
 import '../../core/router/app_router.dart';
 import '../../core/storage/recently_played.dart';
@@ -73,6 +74,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         physics: const BouncingScrollPhysics(),
         slivers: <Widget>[
           SliverToBoxAdapter(child: _Greeting()),
+          const SliverToBoxAdapter(child: _PersonalDjCard()),
           const SliverToBoxAdapter(child: _QuickResumeSection()),
           const SliverToBoxAdapter(child: _TrendingSection()),
           const SliverToBoxAdapter(child: _MadeForYouSection()),
@@ -152,6 +154,117 @@ class _Greeting extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PersonalDjCard extends ConsumerWidget {
+  const _PersonalDjCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = AppThemeScope.of(context);
+    final dj = ref.watch(personalDjProvider);
+    final subtitle = dj.isActive
+        ? 'Your DJ is live — tap to return'
+        : 'A personalized mix from your taste';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      child: GestureDetector(
+        onTap: () => context.push(AppRoutes.personalDj),
+        child: Container(
+          height: 120,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(theme.cardRadius == 0 ? 0 : 16),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[
+                theme.accent.withValues(alpha: 0.9),
+                theme.accent.withValues(alpha: 0.45),
+                theme.surface,
+              ],
+              stops: const <double>[0.0, 0.55, 1.0],
+            ),
+          ),
+          child: Stack(
+            children: <Widget>[
+              Positioned(
+                right: -20,
+                top: -20,
+                child: Icon(
+                  PhosphorIconsFill.headphones,
+                  size: 120,
+                  color: theme.background.withValues(alpha: 0.12),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(18),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: <Widget>[
+                          Text(
+                            'PERSONAL DJ',
+                            style: TextStyle(
+                              color: theme.background.withValues(alpha: 0.75),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 2.2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            dj.isActive ? 'Back to your mix' : 'Start your DJ',
+                            style: TextStyle(
+                              color: theme.background,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.4,
+                              height: 1.05,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitle,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: theme.background.withValues(alpha: 0.8),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: theme.background,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        dj.isActive
+                            ? PhosphorIconsFill.waveform
+                            : PhosphorIconsFill.play,
+                        color: theme.accent,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

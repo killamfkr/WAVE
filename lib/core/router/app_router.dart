@@ -6,6 +6,7 @@ import '../../features/album/album_screen.dart';
 import '../../features/artist/artist_screen.dart';
 import '../../features/discover/discover_screen.dart';
 import '../../features/discover/genre_screen.dart';
+import '../../features/dj/personal_dj_screen.dart';
 import '../../features/home/home_screen.dart';
 import '../../features/library/library_screen.dart';
 import '../../features/player/now_playing_screen.dart';
@@ -24,6 +25,7 @@ class AppRoutes {
   static const String library = '/library';
   static const String settings = '/settings';
   static const String nowPlaying = '/now-playing';
+  static const String personalDj = '/personal-dj';
   static const String artist = '/artist/:id';
   static const String album = '/album/:id';
   static const String playlist = '/playlist/:id';
@@ -187,6 +189,12 @@ final GoRouter appRouter = GoRouter(
       path: AppRoutes.nowPlaying,
       pageBuilder: (context, state) =>
           _sheetPage(key: state.pageKey, child: const NowPlayingScreen()),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootNavigatorKey,
+      path: AppRoutes.personalDj,
+      pageBuilder: (context, state) =>
+          _sheetPage(key: state.pageKey, child: const PersonalDjScreen()),
     ),
   ],
 );

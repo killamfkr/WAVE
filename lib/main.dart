@@ -7,6 +7,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'core/audio/personal_dj_bootstrap.dart';
 import 'core/audio/media_kit_music_player_service.dart';
 import 'core/audio/music_player_service.dart';
 import 'core/sync/cloud_sync_bootstrap.dart';
@@ -106,6 +107,7 @@ class WaveApp extends ConsumerWidget {
               ?child,
               const Positioned.fill(child: ThemeMorphOverlay()),
               const CloudSyncBootstrap(),
+              const PersonalDjBootstrap(),
             ],
           );
         },
