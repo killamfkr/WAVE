@@ -5,7 +5,9 @@ import 'package:hive/hive.dart';
 
 import '../storage/hive_boxes.dart';
 import '../storage/library_providers.dart';
+import '../storage/settings_providers.dart';
 import '../storage/user_profile_providers.dart';
+import '../audio/music_player_service.dart';
 import '../utils/app_logger.dart';
 import 'supabase_sync_config.dart';
 import 'sync_metadata.dart';
@@ -204,10 +206,15 @@ class CloudSyncNotifier extends Notifier<CloudSyncState> {
   }
 
   Future<void> _runSync() async {
+    await _migrateSyncTimestampsIfNeeded();
+
+    final settings = ref.read(appSettingsProvider);
     final localBundle = WaveLibraryBundle.fromLocal(
       profile: ref.read(userProfileProvider),
       playlists: ref.read(userPlaylistsProvider),
       tracksByPlaylistId: ref.read(localPlaylistTracksProvider),
+      likedTracks: ref.read(likedTracksProvider),
+      equalizerBandsDb: settings.equalizerBandsDb,
     );
     final remoteBundle = await _service.pullWaveLibrary();
 
@@ -228,6 +235,19 @@ class CloudSyncNotifier extends Notifier<CloudSyncState> {
     }
 
     await _service.pushWaveLibrary(localBundle);
+  }
+
+  /// One-time bump so existing local liked songs / EQ sync after upgrading.
+  Future<void> _migrateSyncTimestampsIfNeeded() async {
+    if (ref.read(likedTracksProvider).isNotEmpty &&
+        SyncMetadata.likedUpdatedAt().millisecondsSinceEpoch == 0) {
+      await SyncMetadata.touchLiked();
+    }
+    final bands = ref.read(appSettingsProvider).equalizerBandsDb;
+    if (bands.any((db) => db != 0) &&
+        SyncMetadata.settingsUpdatedAt().millisecondsSinceEpoch == 0) {
+      await SyncMetadata.touchSettings();
+    }
   }
 
   Future<void> _applyBundle(WaveLibraryBundle bundle) async {
@@ -255,6 +275,21 @@ class CloudSyncNotifier extends Notifier<CloudSyncState> {
     }
 
     await ref.read(userPlaylistsProvider.notifier).syncCreatorFromProfile();
+
+    if (bundle.likedTracks != null) {
+      await ref.read(likedTracksProvider.notifier).applyFromSync(bundle.likedTracks!);
+      await SyncMetadata.setLikedUpdatedAt(bundle.updatedAt);
+    }
+
+    if (bundle.equalizerBandsDb != null) {
+      await ref
+          .read(appSettingsProvider.notifier)
+          .applyEqualizerFromSync(bundle.equalizerBandsDb!);
+      await ref
+          .read(musicPlayerServiceProvider)
+          .setEqualizer(bundle.equalizerBandsDb!);
+      await SyncMetadata.setSettingsUpdatedAt(bundle.updatedAt);
+    }
   }
 }
 

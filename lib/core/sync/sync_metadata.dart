@@ -11,6 +11,8 @@ class SyncMetadata {
   static const String _profileUpdatedKey = 'sync_profile_updated_at';
   static const String _playlistTimesKey = 'sync_playlist_times';
   static const String _deletedPlaylistsKey = 'sync_deleted_playlists';
+  static const String _likedUpdatedKey = 'sync_liked_updated_at';
+  static const String _settingsUpdatedKey = 'sync_settings_updated_at';
 
   static Box<dynamic> get _box => Hive.box<dynamic>(HiveBoxes.settings);
 
@@ -26,6 +28,38 @@ class SyncMetadata {
   static Future<void> setProfileUpdatedAt(DateTime updatedAt) async {
     await _box.put(
       _profileUpdatedKey,
+      updatedAt.toUtc().toIso8601String(),
+    );
+  }
+
+  static DateTime likedUpdatedAt() {
+    return _parseDate(_box.get(_likedUpdatedKey)) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  static Future<void> touchLiked() async {
+    await setLikedUpdatedAt(DateTime.now().toUtc());
+  }
+
+  static Future<void> setLikedUpdatedAt(DateTime updatedAt) async {
+    await _box.put(
+      _likedUpdatedKey,
+      updatedAt.toUtc().toIso8601String(),
+    );
+  }
+
+  static DateTime settingsUpdatedAt() {
+    return _parseDate(_box.get(_settingsUpdatedKey)) ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  static Future<void> touchSettings() async {
+    await setSettingsUpdatedAt(DateTime.now().toUtc());
+  }
+
+  static Future<void> setSettingsUpdatedAt(DateTime updatedAt) async {
+    await _box.put(
+      _settingsUpdatedKey,
       updatedAt.toUtc().toIso8601String(),
     );
   }

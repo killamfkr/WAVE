@@ -47,11 +47,24 @@ class LikedTracksNotifier extends Notifier<List<DeezerTrack>> {
       await box.put(track.id, _deepJson(track.toJson()));
       state = <DeezerTrack>[track, ...state];
     }
+    await SyncMetadata.touchLiked();
+    ref.read(syncTriggerProvider.notifier).bump();
   }
 
   Future<void> remove(int id) async {
     await Hive.box<dynamic>(HiveBoxes.likedTracks).delete(id);
     state = state.where((t) => t.id != id).toList(growable: false);
+    await SyncMetadata.touchLiked();
+    ref.read(syncTriggerProvider.notifier).bump();
+  }
+
+  Future<void> applyFromSync(List<DeezerTrack> tracks) async {
+    final box = Hive.box<dynamic>(HiveBoxes.likedTracks);
+    await box.clear();
+    for (final track in tracks) {
+      await box.put(track.id, _deepJson(track.toJson()));
+    }
+    state = List<DeezerTrack>.from(tracks);
   }
 }
 

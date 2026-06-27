@@ -455,7 +455,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Use the same PlayTorrio cloud account as PlayTorrioV2 and Stories. Sign in with email and password to sync your profile and playlists.',
+                  'Use the same PlayTorrio cloud account as PlayTorrioV2 and Stories. Sign in with email and password to sync your profile, playlists, liked songs, and equalizer settings.',
                   style: TextStyle(
                     color: theme.onSurfaceMuted,
                     fontSize: 13,

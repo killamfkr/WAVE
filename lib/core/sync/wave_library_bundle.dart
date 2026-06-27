@@ -13,20 +13,27 @@ class WaveLibraryBundle {
     required this.playlists,
     required this.tracksByPlaylistId,
     this.deletedPlaylistIds = const <String>[],
+    this.likedTracks,
+    this.equalizerBandsDb,
   });
 
   static const String prefsKey = 'wave_library';
   static const int profileId = 1;
+  static const int bundleVersion = 2;
 
   final DateTime updatedAt;
   final LocalUserProfile profile;
   final List<DeezerPlaylist> playlists;
   final Map<int, List<DeezerTrack>> tracksByPlaylistId;
   final List<String> deletedPlaylistIds;
+  /// Present when [bundleVersion] >= 2.
+  final List<DeezerTrack>? likedTracks;
+  /// Present when [bundleVersion] >= 2.
+  final List<double>? equalizerBandsDb;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
-      'version': 1,
+      'version': bundleVersion,
       'updatedAt': updatedAt.toUtc().toIso8601String(),
       'profile': profile.toJson(),
       'playlists': playlists.map((p) => p.toJson()).toList(),
@@ -37,6 +44,9 @@ class WaveLibraryBundle {
         ),
       ),
       'deletedPlaylistIds': deletedPlaylistIds,
+      if (likedTracks != null)
+        'likedTracks': likedTracks!.map((t) => t.toJson()).toList(),
+      if (equalizerBandsDb != null) 'equalizerBandsDb': equalizerBandsDb,
     };
   }
 
@@ -44,6 +54,8 @@ class WaveLibraryBundle {
     required LocalUserProfile profile,
     required List<DeezerPlaylist> playlists,
     required Map<int, List<DeezerTrack>> tracksByPlaylistId,
+    required List<DeezerTrack> likedTracks,
+    required List<double> equalizerBandsDb,
   }) {
     final deleted = SyncMetadata.deletedPlaylistIds().toList(growable: false);
     return WaveLibraryBundle(
@@ -52,7 +64,14 @@ class WaveLibraryBundle {
       playlists: playlists,
       tracksByPlaylistId: tracksByPlaylistId,
       deletedPlaylistIds: deleted,
+      likedTracks: likedTracks,
+      equalizerBandsDb: _normalizeEqualizerBands(equalizerBandsDb),
     );
+  }
+
+  static List<double> _normalizeEqualizerBands(List<double> bands) {
+    if (bands.length == 5) return List<double>.from(bands);
+    return const <double>[0, 0, 0, 0, 0];
   }
 
   static DateTime _latestLocalUpdatedAt() {
@@ -63,6 +82,10 @@ class WaveLibraryBundle {
         latest = parsed;
       }
     }
+    final likedAt = SyncMetadata.likedUpdatedAt();
+    if (likedAt.isAfter(latest)) latest = likedAt;
+    final settingsAt = SyncMetadata.settingsUpdatedAt();
+    if (settingsAt.isAfter(latest)) latest = settingsAt;
     return latest;
   }
 
@@ -80,6 +103,7 @@ class WaveLibraryBundle {
     }
     if (map == null) return null;
 
+    final version = (map['version'] as num?)?.toInt() ?? 1;
     final updatedAt = DateTime.tryParse(map['updatedAt'] as String? ?? '')
             ?.toUtc() ??
         DateTime.fromMillisecondsSinceEpoch(0);
@@ -117,6 +141,29 @@ class WaveLibraryBundle {
         ? deletedRaw.map((e) => e.toString()).toList(growable: false)
         : const <String>[];
 
+    List<DeezerTrack>? likedTracks;
+    List<double>? equalizerBandsDb;
+    if (version >= 2) {
+      final likedRaw = map['likedTracks'];
+      if (likedRaw is List) {
+        likedTracks = likedRaw
+            .whereType<Map>()
+            .map((t) => DeezerTrack.fromJson(Map<String, dynamic>.from(t)))
+            .toList(growable: false);
+      } else {
+        likedTracks = const <DeezerTrack>[];
+      }
+
+      final bandsRaw = map['equalizerBandsDb'];
+      if (bandsRaw is List) {
+        equalizerBandsDb = _normalizeEqualizerBands(
+          bandsRaw.whereType<num>().map((n) => n.toDouble()).toList(),
+        );
+      } else {
+        equalizerBandsDb = const <double>[0, 0, 0, 0, 0];
+      }
+    }
+
     return WaveLibraryBundle(
       updatedAt: updatedAt,
       profile: LocalUserProfile.fromJson(
@@ -125,6 +172,8 @@ class WaveLibraryBundle {
       playlists: playlists,
       tracksByPlaylistId: tracksById,
       deletedPlaylistIds: deleted,
+      likedTracks: likedTracks,
+      equalizerBandsDb: equalizerBandsDb,
     );
   }
 }

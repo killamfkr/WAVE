@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
 
 import 'hive_boxes.dart';
+import '../sync/sync_metadata.dart';
+import '../sync/sync_trigger_providers.dart';
 
 enum AudioQuality { standard, high, lossless }
 
@@ -134,10 +136,22 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
     next[index] = db.clamp(-12.0, 12.0);
     state = state.copyWith(equalizerBandsDb: next);
     await _persist();
+    await SyncMetadata.touchSettings();
+    ref.read(syncTriggerProvider.notifier).bump();
   }
 
   Future<void> resetEqualizer() async {
     state = state.copyWith(equalizerBandsDb: const <double>[0, 0, 0, 0, 0]);
+    await _persist();
+    await SyncMetadata.touchSettings();
+    ref.read(syncTriggerProvider.notifier).bump();
+  }
+
+  Future<void> applyEqualizerFromSync(List<double> bands) async {
+    final normalized = bands.length == 5
+        ? List<double>.from(bands)
+        : const <double>[0, 0, 0, 0, 0];
+    state = state.copyWith(equalizerBandsDb: normalized);
     await _persist();
   }
 
