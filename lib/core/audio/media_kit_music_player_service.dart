@@ -11,11 +11,24 @@ import '../api/models/player_state.dart';
 import '../api/models/queue_state.dart';
 import '../utils/app_logger.dart';
 import '../storage/hive_boxes.dart';
-import 'local_proxy.dart';
 import 'music_player_service.dart';
 import 'similar_tracks_resolver.dart';
 import 'youtube_stream_resolver.dart';
 import 'android_auto_browse.dart';
+
+class _PlayableSource {
+  const _PlayableSource({
+    required this.uri,
+    this.httpHeaders,
+    this.expiresAt,
+  });
+
+  final String uri;
+  final Map<String, String>? httpHeaders;
+  final DateTime? expiresAt;
+
+  mk.Media toMedia() => mk.Media(uri, httpHeaders: httpHeaders);
+}
 
 /// Real audio backend powered by `media_kit` (libmpv).
 /// Uses a dual-player architecture to support true overlapping crossfades.
@@ -29,11 +42,17 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
         _similarResolver = similarResolver ?? SimilarTracksResolver() {
     _initPlayer(_playerA);
     _initPlayer(_playerB);
+    unawaited(_configurePlayer(_playerA));
+    unawaited(_configurePlayer(_playerB));
     _loadInitialSettings();
   }
 
-  final mk.Player _playerA = mk.Player();
-  final mk.Player _playerB = mk.Player();
+  static const mk.PlayerConfiguration _playerConfig = mk.PlayerConfiguration(
+    bufferSize: 64 * 1024 * 1024,
+  );
+
+  final mk.Player _playerA = mk.Player(configuration: _playerConfig);
+  final mk.Player _playerB = mk.Player(configuration: _playerConfig);
   late mk.Player _activePlayer = _playerA;
   late mk.Player _inactivePlayer = _playerB;
 
@@ -57,6 +76,99 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
   int _playbackRecoveryAttempts = 0;
   static const int _maxPlaybackRecoveryAttempts = 2;
   bool _autoplayInFlight = false;
+  Timer? _streamRefreshTimer;
+  DateTime? _lastRecoveryAt;
+  static const Duration _recoveryCooldown = Duration(seconds: 20);
+  static const Duration _fallbackStreamRefresh = Duration(minutes: 45);
+
+  Future<void> _configurePlayer(mk.Player player) async {
+    try {
+      if (player.platform is mk.NativePlayer) {
+        final native = player.platform as mk.NativePlayer;
+        await native.setProperty('cache', 'yes');
+        await native.setProperty('cache-secs', '20');
+        await native.setProperty('demuxer-readahead-secs', '20');
+      }
+    } catch (e) {
+      appLogger.w('Failed to configure player streaming cache: $e');
+    }
+  }
+
+  void _cancelStreamRefresh() {
+    _streamRefreshTimer?.cancel();
+    _streamRefreshTimer = null;
+  }
+
+  DateTime? _parseStreamExpiry(String url) {
+    try {
+      final exp = Uri.parse(url).queryParameters['expire'];
+      final secs = int.tryParse(exp ?? '');
+      if (secs == null) return null;
+      return DateTime.fromMillisecondsSinceEpoch(secs * 1000, isUtc: true);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _scheduleStreamRefresh(DateTime? expiresAt) {
+    _cancelStreamRefresh();
+    final now = DateTime.now().toUtc();
+    DateTime? refreshAt;
+    if (expiresAt != null) {
+      refreshAt = expiresAt.subtract(const Duration(minutes: 3));
+    } else {
+      refreshAt = now.add(_fallbackStreamRefresh);
+    }
+    var delay = refreshAt.difference(now);
+    if (delay.isNegative) {
+      delay = const Duration(seconds: 5);
+    }
+    _streamRefreshTimer = Timer(delay, () {
+      unawaited(_refreshStreamInPlace());
+    });
+  }
+
+  Future<void> _openSourceOnPlayer(
+    mk.Player player,
+    _PlayableSource source, {
+    bool play = true,
+    Duration? seekTo,
+  }) async {
+    await player.open(source.toMedia(), play: play);
+    await _applyEqualizerToPlayer(player);
+    if (seekTo != null && seekTo > Duration.zero) {
+      await player.seek(seekTo);
+    }
+    _scheduleStreamRefresh(source.expiresAt);
+  }
+
+  Future<void> _refreshStreamInPlace() async {
+    if (_loading || _isCrossfading || _autoplayInFlight) return;
+    final track = _state.currentTrack;
+    if (track == null) return;
+    if (_getDownloadedAudioPath(track.id) != null) return;
+
+    final resumeAt = _state.position;
+    final wasPlaying = _activePlayer.state.playing;
+    appLogger.i('Refreshing stream URL in place at $resumeAt');
+
+    try {
+      final source = await _resolvePlayableSource(track, forceRefresh: true);
+      if (source == null) return;
+      await _openSourceOnPlayer(
+        _activePlayer,
+        source,
+        play: wasPlaying,
+        seekTo: resumeAt,
+      );
+      _playbackRecoveryAttempts = 0;
+      if (wasPlaying) {
+        _emitPlayer(_state.copyWith(status: PlaybackStatus.playing));
+      }
+    } catch (e, st) {
+      appLogger.w('In-place stream refresh failed', error: e, stackTrace: st);
+    }
+  }
 
   void _initPlayer(mk.Player player) {
     player.stream.playing.listen((v) => _onPlayingChanged(player, v));
@@ -300,10 +412,17 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
     if (_isCrossfading) return;
     appLogger.e('media_kit error: $e');
 
+    final now = DateTime.now();
+    if (_lastRecoveryAt != null &&
+        now.difference(_lastRecoveryAt!) < _recoveryCooldown) {
+      return;
+    }
+
     if (_state.currentTrack != null &&
         _playbackRecoveryAttempts < _maxPlaybackRecoveryAttempts &&
         _isRecoverablePlaybackError(e)) {
       _playbackRecoveryAttempts++;
+      _lastRecoveryAt = now;
       unawaited(_recoverCurrentTrack());
       return;
     }
@@ -320,33 +439,37 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
     return lower.contains('403') ||
         lower.contains('404') ||
         lower.contains('410') ||
-        lower.contains('connection') ||
-        lower.contains('reset') ||
+        lower.contains('connection reset') ||
+        lower.contains('connection closed') ||
+        lower.contains('timed out') ||
         lower.contains('timeout') ||
-        lower.contains('failed') ||
-        lower.contains('http') ||
-        lower.contains('network') ||
-        lower.contains('eof') ||
-        lower.contains('end of file');
+        lower.contains('network is unreachable') ||
+        lower.contains('end of file') ||
+        lower.contains('eof');
   }
 
-  Future<String?> _resolvePlayableUrl(
+  Future<_PlayableSource?> _resolvePlayableSource(
     DeezerTrack track, {
     bool forceRefresh = false,
   }) async {
     final localPath = _getDownloadedAudioPath(track.id);
-    if (localPath != null) return 'file://$localPath';
+    if (localPath != null) {
+      return _PlayableSource(uri: 'file://$localPath');
+    }
 
     final res = await _resolver.resolveUrl(track, forceRefresh: forceRefresh);
     if (res == null) return null;
 
-    var url = res.url;
-    if (url.contains('googlevideo.com') && LocalProxy.isRunning) {
-      final encodedUrl = Uri.encodeComponent(url);
-      final encodedUa = Uri.encodeComponent(res.userAgent ?? '');
-      url = 'http://127.0.0.1:${LocalProxy.port}/proxy?url=$encodedUrl&ua=$encodedUa';
-    }
-    return url;
+    final url = res.url;
+    final headers = url.contains('googlevideo.com')
+        ? _buildStreamHeaders(userAgent: res.userAgent)
+        : null;
+
+    return _PlayableSource(
+      uri: url,
+      httpHeaders: headers,
+      expiresAt: _parseStreamExpiry(url),
+    );
   }
 
   Future<void> _recoverCurrentTrack() async {
@@ -363,14 +486,15 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
     );
 
     try {
-      final url = await _resolvePlayableUrl(track, forceRefresh: true);
-      if (url == null) throw Exception('No audio source found');
+      final source = await _resolvePlayableSource(track, forceRefresh: true);
+      if (source == null) throw Exception('No audio source found');
 
-      await _activePlayer.open(mk.Media(url), play: true);
-      await _applyEqualizerToPlayer(_activePlayer);
-      if (resumeAt > Duration.zero) {
-        await _activePlayer.seek(resumeAt);
-      }
+      await _openSourceOnPlayer(
+        _activePlayer,
+        source,
+        play: true,
+        seekTo: resumeAt,
+      );
       _loading = false;
       _playbackRecoveryAttempts = 0;
       _emitPlayer(_state.copyWith(status: PlaybackStatus.playing));
@@ -542,11 +666,10 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
     );
 
     try {
-      final url = await _resolvePlayableUrl(track);
-      if (url == null) throw Exception('No audio source found');
+      final source = await _resolvePlayableSource(track);
+      if (source == null) throw Exception('No audio source found');
 
-      await fadingInPlayer.open(mk.Media(url), play: true);
-      await _applyEqualizerToPlayer(fadingInPlayer);
+      await _openSourceOnPlayer(fadingInPlayer, source, play: true);
       
       _loading = false;
       _playbackRecoveryAttempts = 0;
@@ -563,12 +686,11 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
       appLogger.e('media_kit load failed', error: e, stackTrace: st);
 
       try {
-        final url = await _resolvePlayableUrl(track, forceRefresh: true);
-        if (url != null) {
+        final source = await _resolvePlayableSource(track, forceRefresh: true);
+        if (source != null) {
           _activePlayer = fadingInPlayer;
           _inactivePlayer = fadingOutPlayer;
-          await fadingInPlayer.open(mk.Media(url), play: true);
-          await _applyEqualizerToPlayer(fadingInPlayer);
+          await _openSourceOnPlayer(fadingInPlayer, source, play: true);
           await fadingOutPlayer.stop();
           _playbackRecoveryAttempts = 0;
           _emitPlayer(_state.copyWith(status: PlaybackStatus.playing));
@@ -638,8 +760,8 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
       ),
     );
     try {
-      final url = await _resolvePlayableUrl(track);
-      if (url == null) {
+      final source = await _resolvePlayableSource(track);
+      if (source == null) {
         _loading = false;
         _emitPlayer(
           _state.copyWith(
@@ -650,8 +772,7 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
         return;
       }
 
-      await player.open(mk.Media(url), play: true);
-      await _applyEqualizerToPlayer(player);
+      await _openSourceOnPlayer(player, source, play: true);
       _loading = false;
       _playbackRecoveryAttempts = 0;
       _emitPlayer(_state.copyWith(status: PlaybackStatus.playing));
@@ -725,6 +846,7 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
   @override
   Future<void> stop() async {
     _crossfadeTimer?.cancel();
+    _cancelStreamRefresh();
     _isCrossfading = false;
     await _activePlayer.stop();
     await _inactivePlayer.stop();
@@ -950,6 +1072,7 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
   @override
   Future<void> dispose() async {
     _crossfadeTimer?.cancel();
+    _cancelStreamRefresh();
     await _playerA.dispose();
     await _playerB.dispose();
     _resolver.dispose();

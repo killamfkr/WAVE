@@ -900,8 +900,8 @@ class _CachedStream {
   bool get isExpired {
     final exp = expiresAt;
     if (exp != null) {
-      // Expire 60s early to avoid racing the CDN.
-      return DateTime.now().isAfter(exp.subtract(const Duration(seconds: 60)));
+      // Expire 5 minutes early so preloaded / queued URLs stay valid at playback.
+      return DateTime.now().isAfter(exp.subtract(const Duration(minutes: 5)));
     }
     return DateTime.now().difference(cachedAt) >= const Duration(hours: 4);
   }

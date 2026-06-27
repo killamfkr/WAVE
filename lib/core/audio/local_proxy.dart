@@ -72,6 +72,13 @@ class LocalProxy {
               .timeout(const Duration(seconds: 30));
 
           request.response.statusCode = response.statusCode;
+
+          if (response.statusCode >= 400) {
+            await response.stream.drain();
+            await request.response.close();
+            client.close();
+            return;
+          }
           
           // Copy headers back to media_kit
           response.headers.forEach((key, value) {
