@@ -63,6 +63,7 @@ final personalDjVoiceProvider = Provider<PersonalDjVoiceService>((ref) {
 class PersonalDjNotifier extends Notifier<PersonalDjState> {
   Set<int> _likedIds = const <int>{};
   int? _lastSpokenTrackId;
+  String? _lastSpokenScript;
 
   PersonalDjVoiceService get _voice => ref.read(personalDjVoiceProvider);
   MusicPlayerService get _player => ref.read(playerControlsProvider);
@@ -86,6 +87,7 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
       );
       _likedIds = session.likedTrackIds;
       _lastSpokenTrackId = null;
+      _lastSpokenScript = null;
 
       await _player.setShuffle(true);
       await _player.setAutoplaySimilar(true);
@@ -102,7 +104,7 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
       );
 
       if (voiceEnabled) {
-        await _speak(session.opener, duck: false);
+        await _speak(session.openerSpoken, duck: false, mood: mood);
         _lastSpokenTrackId = session.seed.id;
       }
 
@@ -129,13 +131,13 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
     if (!state.isActive || track == null) return;
     if (track.id == _lastSpokenTrackId) return;
 
-    final liner = PersonalDjService.linerFor(
+    final line = PersonalDjService.linerFor(
       track,
       likedIds: _likedIds,
       mood: state.mood,
     );
-    state = state.copyWith(liner: liner);
-    _speak(liner, duck: true, trackId: track.id);
+    state = state.copyWith(liner: line.display);
+    _speak(line.spoken, duck: true, trackId: track.id, mood: state.mood);
   }
 
   Future<void> toggleVoice() async {
@@ -147,8 +149,18 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
     }
     state = state.copyWith(voiceEnabled: next);
     final line = state.liner ?? state.opener;
-    if (line != null && state.isActive) {
-      await _speak(line, duck: _player.playerState.currentTrack != null);
+    if (_lastSpokenScript != null && state.isActive) {
+      await _speak(
+        _lastSpokenScript!,
+        duck: _player.playerState.currentTrack != null,
+        mood: state.mood,
+      );
+    } else if (line != null && state.isActive) {
+      await _speak(
+        line,
+        duck: _player.playerState.currentTrack != null,
+        mood: state.mood,
+      );
     }
   }
 
@@ -156,15 +168,18 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
     String text, {
     bool duck = false,
     int? trackId,
+    PersonalDjMood mood = PersonalDjMood.mixed,
   }) async {
     if (!state.voiceEnabled) return;
 
+    _lastSpokenScript = text;
     state = state.copyWith(isSpeaking: true);
     try {
       await _voice.speak(
         text,
         player: duck ? _player : null,
         duck: duck,
+        mood: mood,
       );
       if (trackId != null) {
         _lastSpokenTrackId = trackId;
@@ -180,6 +195,7 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
     await _voice.stop();
     _likedIds = const <int>{};
     _lastSpokenTrackId = null;
+    _lastSpokenScript = null;
     state = const PersonalDjState();
   }
 }

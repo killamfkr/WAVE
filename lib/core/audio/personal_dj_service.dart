@@ -4,6 +4,7 @@ import '../api/deezer_api_client.dart';
 import '../api/models/deezer_track.dart';
 import '../storage/recently_played.dart';
 import '../utils/app_logger.dart';
+import 'personal_dj_speech.dart';
 import 'similar_tracks_resolver.dart';
 
 enum PersonalDjMood { mixed, chill, hype, discover }
@@ -13,12 +14,14 @@ class PersonalDjSession {
     required this.queue,
     required this.seed,
     required this.opener,
+    required this.openerSpoken,
     required this.likedTrackIds,
   });
 
   final List<DeezerTrack> queue;
   final DeezerTrack seed;
   final String opener;
+  final String openerSpoken;
   final Set<int> likedTrackIds;
 }
 
@@ -60,8 +63,8 @@ class PersonalDjService {
       queue.insert(_rng.nextInt(min(3, queue.length + 1)), seed);
     }
 
-    final opener = _openerFor(
-      seed,
+    final openerLine = PersonalDjSpeech.opener(
+      seed: seed,
       fromLiked: likedIds.contains(seed.id),
       fromRecent: recent.any((e) => e.kind == 'track' && e.id == seed.id),
       mood: mood,
@@ -70,7 +73,8 @@ class PersonalDjService {
     return PersonalDjSession(
       queue: queue,
       seed: seed,
-      opener: opener,
+      opener: openerLine.display,
+      openerSpoken: openerLine.spoken,
       likedTrackIds: likedIds,
     );
   }
@@ -129,50 +133,16 @@ class PersonalDjService {
     }
   }
 
-  String _openerFor(
-    DeezerTrack seed, {
-    required bool fromLiked,
-    required bool fromRecent,
-    required PersonalDjMood mood,
-  }) {
-    final artist = seed.artist?.name ?? 'your favorites';
-    final title = seed.title;
-    final moodLine = switch (mood) {
-      PersonalDjMood.chill => "Let's ease in with something smooth.",
-      PersonalDjMood.hype => "Turning the energy up for you.",
-      PersonalDjMood.discover => "I'll lean into fresh picks you haven't heard here yet.",
-      PersonalDjMood.mixed => "I built a mix from your taste.",
-    };
-    if (fromLiked) {
-      return "$moodLine Starting from your liked songs — $title by $artist.";
-    }
-    if (fromRecent) {
-      return "$moodLine You've had $artist on repeat — here's a set that matches.";
-    }
-    return "$moodLine First up: $title by $artist.";
-  }
-
-  static String linerFor(
+  static DjLine linerFor(
     DeezerTrack track, {
     required Set<int> likedIds,
     PersonalDjMood mood = PersonalDjMood.mixed,
   }) {
-    final artist = track.artist?.name ?? 'this artist';
-    final title = track.title;
-    final options = <String>[
-      if (likedIds.contains(track.id))
-        "You've liked this one before — $title."
-      else
-        "Up next: $title by $artist.",
-      switch (mood) {
-        PersonalDjMood.chill => "Keeping it mellow with $artist.",
-        PersonalDjMood.hype => "This should hit — $title.",
-        PersonalDjMood.discover => "Found something new in the $artist lane.",
-        PersonalDjMood.mixed => "This pairs well with what you've been playing.",
-      },
-      "More from the $artist world coming up.",
-    ];
-    return options[Random().nextInt(options.length)];
+    return PersonalDjSpeech.liner(
+      track: track,
+      likedIds: likedIds,
+      mood: mood,
+    );
   }
 
   static String moodLabel(PersonalDjMood mood) => switch (mood) {

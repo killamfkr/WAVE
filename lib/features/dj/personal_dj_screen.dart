@@ -143,7 +143,7 @@ class _StartDjViewState extends State<_StartDjView> {
                 const SizedBox(height: 12),
                 Text(
                   'A continuous mix built from your likes, recent plays, '
-                  'and similar tracks — with spoken DJ commentary as it flows.',
+                  'and similar tracks — with a natural DJ voice as it flows.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: theme.onSurfaceMuted,
