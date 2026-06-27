@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import '../../core/app_version_provider.dart';
 import '../../core/audio/player_providers.dart';
 import '../../core/router/app_router.dart';
 import '../../core/storage/library_providers.dart';
@@ -1234,14 +1235,14 @@ class _EqBand extends ConsumerWidget {
 // ---------------------------------------------------------------------------
 // About --------------------------------------------------------------------
 
-class _AboutBlock extends StatefulWidget {
+class _AboutBlock extends ConsumerStatefulWidget {
   const _AboutBlock();
 
   @override
-  State<_AboutBlock> createState() => _AboutBlockState();
+  ConsumerState<_AboutBlock> createState() => _AboutBlockState();
 }
 
-class _AboutBlockState extends State<_AboutBlock> {
+class _AboutBlockState extends ConsumerState<_AboutBlock> {
   bool _isCheckingForUpdates = false;
 
   Future<void> _checkForUpdates(BuildContext context) async {
@@ -1281,6 +1282,11 @@ class _AboutBlockState extends State<_AboutBlock> {
   @override
   Widget build(BuildContext context) {
     final theme = AppThemeScope.of(context);
+    final versionAsync = ref.watch(appVersionProvider);
+    final versionLabel = versionAsync.maybeWhen(
+      data: (info) => info.label,
+      orElse: () => 'Loading version…',
+    );
     return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1321,7 +1327,7 @@ class _AboutBlockState extends State<_AboutBlock> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'v1.0.3  ·  Build 3',
+                      versionLabel,
                       style: TextStyle(
                         color: theme.onSurfaceMuted,
                         fontSize: 12,
