@@ -67,7 +67,9 @@ class LocalProxy {
           }
 
           final client = http.Client();
-          final response = await client.send(proxyRequest);
+          final response = await client
+              .send(proxyRequest)
+              .timeout(const Duration(seconds: 30));
 
           request.response.statusCode = response.statusCode;
           

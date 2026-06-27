@@ -49,6 +49,8 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
   bool _isCrossfading = false;
   bool _autoCrossfadeTriggered = false;
   List<double> _equalizerBandsDb = const <double>[0, 0, 0, 0, 0];
+  int _playbackRecoveryAttempts = 0;
+  static const int _maxPlaybackRecoveryAttempts = 2;
 
   void _initPlayer(mk.Player player) {
     player.stream.playing.listen((v) => _onPlayingChanged(player, v));
@@ -228,9 +230,15 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
 
   void _onCompleted(mk.Player p, bool completed) {
     if (p != _activePlayer) return;
-    if (completed && !_isCrossfading && !_autoCrossfadeTriggered) {
-      unawaited(skipNext());
+    if (!completed || _isCrossfading || _autoCrossfadeTriggered) return;
+
+    if (_state.repeat == RepeatMode.one) {
+      unawaited(_activePlayer.seek(Duration.zero));
+      unawaited(_activePlayer.play());
+      return;
     }
+
+    unawaited(skipNext());
   }
 
   void _onPositionChanged(mk.Player p, Duration pos) {
@@ -279,12 +287,139 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
 
   void _onError(mk.Player p, String e) {
     if (p != _activePlayer) return;
-    if (_loading || _isCrossfading) return;
+    if (_isCrossfading) return;
     appLogger.e('media_kit error: $e');
+
+    if (_state.currentTrack != null &&
+        _playbackRecoveryAttempts < _maxPlaybackRecoveryAttempts &&
+        _isRecoverablePlaybackError(e)) {
+      _playbackRecoveryAttempts++;
+      unawaited(_recoverCurrentTrack());
+      return;
+    }
+
+    _playbackRecoveryAttempts = 0;
     _emitPlayer(_state.copyWith(
       status: PlaybackStatus.error,
       errorMessage: e,
     ));
+  }
+
+  bool _isRecoverablePlaybackError(String error) {
+    final lower = error.toLowerCase();
+    return lower.contains('403') ||
+        lower.contains('404') ||
+        lower.contains('410') ||
+        lower.contains('connection') ||
+        lower.contains('reset') ||
+        lower.contains('timeout') ||
+        lower.contains('failed') ||
+        lower.contains('http') ||
+        lower.contains('network') ||
+        lower.contains('eof') ||
+        lower.contains('end of file');
+  }
+
+  Future<String?> _resolvePlayableUrl(
+    DeezerTrack track, {
+    bool forceRefresh = false,
+  }) async {
+    final localPath = _getDownloadedAudioPath(track.id);
+    if (localPath != null) return 'file://$localPath';
+
+    final res = await _resolver.resolveUrl(track, forceRefresh: forceRefresh);
+    if (res == null) return null;
+
+    var url = res.url;
+    if (url.contains('googlevideo.com') && LocalProxy.isRunning) {
+      final encodedUrl = Uri.encodeComponent(url);
+      final encodedUa = Uri.encodeComponent(res.userAgent ?? '');
+      url = 'http://127.0.0.1:${LocalProxy.port}/proxy?url=$encodedUrl&ua=$encodedUa';
+    }
+    return url;
+  }
+
+  Future<void> _recoverCurrentTrack() async {
+    final track = _state.currentTrack;
+    if (track == null) return;
+
+    final resumeAt = _state.position;
+    _loading = true;
+    _emitPlayer(
+      _state.copyWith(
+        status: PlaybackStatus.loading,
+        errorMessage: null,
+      ),
+    );
+
+    try {
+      final url = await _resolvePlayableUrl(track, forceRefresh: true);
+      if (url == null) throw Exception('No audio source found');
+
+      await _activePlayer.open(mk.Media(url), play: true);
+      await _applyEqualizerToPlayer(_activePlayer);
+      if (resumeAt > Duration.zero) {
+        await _activePlayer.seek(resumeAt);
+      }
+      _loading = false;
+      _playbackRecoveryAttempts = 0;
+      _emitPlayer(_state.copyWith(status: PlaybackStatus.playing));
+    } catch (e, st) {
+      _loading = false;
+      appLogger.e('Playback recovery failed', error: e, stackTrace: st);
+      if (_playbackRecoveryAttempts >= _maxPlaybackRecoveryAttempts) {
+        _playbackRecoveryAttempts = 0;
+        _emitPlayer(
+          _state.copyWith(
+            status: PlaybackStatus.error,
+            errorMessage: 'Playback stopped. Try skipping to the next track.',
+          ),
+        );
+      }
+    }
+  }
+
+  List<DeezerTrack> _fullPlaylistLoop() {
+    return <DeezerTrack>[
+      ..._queue.history,
+      if (_queue.current != null) _queue.current!,
+      ..._queue.upcoming,
+    ];
+  }
+
+  DeezerTrack? _repeatAllNextTrack() {
+    final loop = _fullPlaylistLoop();
+    if (loop.isEmpty) return null;
+    final current = _queue.current;
+    if (current == null) return loop.first;
+    final idx = loop.indexOf(current);
+    if (idx == -1) return loop.first;
+    return loop[(idx + 1) % loop.length];
+  }
+
+  Future<void> _playRepeatAllNext() async {
+    final loop = _fullPlaylistLoop();
+    final next = _repeatAllNextTrack();
+    if (next == null || loop.isEmpty) {
+      await stop();
+      return;
+    }
+
+    final nextIndex = loop.indexOf(next);
+    final newHistory = nextIndex > 0 ? loop.sublist(0, nextIndex) : const <DeezerTrack>[];
+    var newUpcoming = nextIndex < loop.length - 1
+        ? loop.sublist(nextIndex + 1)
+        : const <DeezerTrack>[];
+    if (_state.shuffle && newUpcoming.isNotEmpty) {
+      newUpcoming = List<DeezerTrack>.from(newUpcoming)..shuffle(Random());
+    }
+
+    _emitQueue(_queue.copyWith(
+      history: newHistory,
+      current: next,
+      upcoming: newUpcoming,
+    ));
+    await _startPlayback(next, autoCrossfade: false);
   }
 
   // ---------------------------------------------------------------------------
@@ -355,30 +490,14 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
     );
 
     try {
-      String? url;
-      String? userAgent;
-      
-      final localPath = _getDownloadedAudioPath(track.id);
-      if (localPath == null) {
-        final res = await _resolver.resolveUrl(track);
-        url = res?.url;
-        userAgent = res?.userAgent;
-      } else {
-        url = 'file://$localPath'; // Wrap local path in file:// URI
-      }
+      final url = await _resolvePlayableUrl(track);
       if (url == null) throw Exception('No audio source found');
-      
-      // Route YouTube urls through our local proxy
-      if (url.contains('googlevideo.com') && LocalProxy.isRunning) {
-        final encodedUrl = Uri.encodeComponent(url);
-        final encodedUa = Uri.encodeComponent(userAgent ?? '');
-        url = 'http://127.0.0.1:${LocalProxy.port}/proxy?url=$encodedUrl&ua=$encodedUa';
-      }
 
       await fadingInPlayer.open(mk.Media(url), play: true);
       await _applyEqualizerToPlayer(fadingInPlayer);
       
       _loading = false;
+      _playbackRecoveryAttempts = 0;
       _emitPlayer(_state.copyWith(status: PlaybackStatus.playing));
       _preloadNext();
     } catch (e, st) {
@@ -390,8 +509,24 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
       _inactivePlayer = fadingInPlayer;
 
       appLogger.e('media_kit load failed', error: e, stackTrace: st);
-      
-      // Attempt to auto-skip to the next song instead of just failing silently and stopping the queue
+
+      try {
+        final url = await _resolvePlayableUrl(track, forceRefresh: true);
+        if (url != null) {
+          _activePlayer = fadingInPlayer;
+          _inactivePlayer = fadingOutPlayer;
+          await fadingInPlayer.open(mk.Media(url), play: true);
+          await _applyEqualizerToPlayer(fadingInPlayer);
+          await fadingOutPlayer.stop();
+          _playbackRecoveryAttempts = 0;
+          _emitPlayer(_state.copyWith(status: PlaybackStatus.playing));
+          _preloadNext();
+          return;
+        }
+      } catch (retryError, retrySt) {
+        appLogger.e('Crossfade retry failed', error: retryError, stackTrace: retrySt);
+      }
+
       unawaited(skipNext());
       return;
     }
@@ -451,17 +586,7 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
       ),
     );
     try {
-      String? url;
-      String? userAgent;
-      
-      final localPath = _getDownloadedAudioPath(track.id);
-      if (localPath == null) {
-        final res = await _resolver.resolveUrl(track);
-        url = res?.url;
-        userAgent = res?.userAgent;
-      } else {
-        url = 'file://$localPath';
-      }
+      final url = await _resolvePlayableUrl(track);
       if (url == null) {
         _loading = false;
         _emitPlayer(
@@ -473,16 +598,10 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
         return;
       }
 
-      // Route YouTube urls through our local proxy
-      if (url.contains('googlevideo.com') && LocalProxy.isRunning) {
-        final encodedUrl = Uri.encodeComponent(url);
-        final encodedUa = Uri.encodeComponent(userAgent ?? '');
-        url = 'http://127.0.0.1:${LocalProxy.port}/proxy?url=$encodedUrl&ua=$encodedUa';
-      }
-
-      await player.open(mk.Media(url));
+      await player.open(mk.Media(url), play: true);
       await _applyEqualizerToPlayer(player);
       _loading = false;
+      _playbackRecoveryAttempts = 0;
       _emitPlayer(_state.copyWith(status: PlaybackStatus.playing));
       _preloadNext();
     } catch (e, st) {
@@ -579,6 +698,17 @@ class MediaKitMusicPlayerService extends BaseAudioHandler
   @override
   Future<void> skipNext() async {
     if (_queue.upcoming.isEmpty) {
+      if (_state.repeat == RepeatMode.all) {
+        final loop = _fullPlaylistLoop();
+        if (loop.length == 1) {
+          await _startPlayback(loop.first, autoCrossfade: false);
+          return;
+        }
+        if (loop.length > 1) {
+          await _playRepeatAllNext();
+          return;
+        }
+      }
       await stop();
       return;
     }

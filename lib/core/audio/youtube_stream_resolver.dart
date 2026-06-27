@@ -25,7 +25,15 @@ class YoutubeStreamResolver {
 
   /// Returns a direct stream URL and User-Agent for [track], or `null` if no
   /// backend could resolve it.
-  Future<({String url, String? userAgent})?> resolveUrl(DeezerTrack track) async {
+  Future<({String url, String? userAgent})?> resolveUrl(
+    DeezerTrack track, {
+    bool forceRefresh = false,
+  }) async {
+    if (forceRefresh) {
+      _cache.remove(track.id);
+      YoutubeAudioExtractor.instance.invalidateStreamCache();
+    }
+
     // 1. Primary fast path: custom InnerTube extractor.
     try {
       final videoId = await YoutubeAudioExtractor.instance.searchVideoId(

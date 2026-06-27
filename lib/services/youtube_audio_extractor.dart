@@ -172,6 +172,15 @@ class YoutubeAudioExtractor {
   final Map<String, _CachedVideoId> _videoIdCache = {};
   final Map<String, _CachedStream> _streamCache = {};
 
+  /// Drop cached stream URL(s) so the next resolve hits YouTube again.
+  void invalidateStreamCache({String? videoId}) {
+    if (videoId != null) {
+      _streamCache.remove(videoId);
+      return;
+    }
+    _streamCache.clear();
+  }
+
   // ===========================================================================
   // Public API
   // ===========================================================================
