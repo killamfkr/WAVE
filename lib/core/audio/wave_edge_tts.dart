@@ -9,8 +9,19 @@ import 'package:crypto/crypto.dart';
 
 /// Edge TTS client with correct binary audio frame handling.
 class WaveEdgeTts {
+  /// Male voices currently available on the Edge consumer API.
+  static const preferredMaleVoices = <String>[
+    'en-US-AndrewNeural',
+    'en-US-ChristopherNeural',
+    'en-US-GuyNeural',
+    'en-US-BrianNeural',
+    'en-US-EricNeural',
+  ];
+
+  static const defaultVoice = 'en-US-AndrewNeural';
+
   WaveEdgeTts({
-    this.voice = 'en-US-DavisNeural',
+    this.voice = defaultVoice,
     this.voiceLocale = 'en-US',
   });
 

@@ -24,7 +24,6 @@ class PersonalDjVoiceService {
     });
   }
 
-  final WaveEdgeTts _edge = WaveEdgeTts();
   final FlutterTts _fallbackTts = FlutterTts();
   final Player _player = Player();
   bool _speaking = false;
@@ -38,7 +37,7 @@ class PersonalDjVoiceService {
     try {
       await _fallbackTts.setLanguage('en-US');
       await _fallbackTts.setSpeechRate(0.56);
-      await _fallbackTts.setPitch(0.92);
+      await _fallbackTts.setPitch(0.85);
       await _fallbackTts.setVolume(1.0);
       await _fallbackTts.awaitSpeakCompletion(true);
 
@@ -53,39 +52,60 @@ class PersonalDjVoiceService {
         );
       }
 
-      final voices = await _fallbackTts.getVoices;
-      if (voices is List) {
-        Map<dynamic, dynamic>? best;
-        var bestScore = -1;
-        for (final voice in voices) {
-          if (voice is! Map) continue;
-          final locale = (voice['locale'] ?? '').toString().toLowerCase();
-          if (!locale.startsWith('en')) continue;
-          final name = (voice['name'] ?? '').toString().toLowerCase();
-          var score = 0;
-          if (name.contains('neural')) score += 50;
-          if (name.contains('enhanced')) score += 40;
-          if (locale.contains('us')) score += 10;
-          if (name.contains('davis')) score += 70;
-          if (name.contains('tony')) score += 55;
-          if (_isMaleVoiceName(name)) score += 35;
-          if (_isFemaleVoiceName(name)) score -= 40;
-          if (score > bestScore) {
-            bestScore = score;
-            best = voice;
-          }
-        }
-        if (best != null) {
-          await _fallbackTts.setVoice(<String, String>{
-            'name': best['name']?.toString() ?? '',
-            'locale': best['locale']?.toString() ?? 'en-US',
-          });
-        }
+      final voice = await _pickFallbackMaleVoice();
+      if (voice != null) {
+        await _fallbackTts.setVoice(voice);
       }
       _fallbackReady = true;
     } catch (e) {
       appLogger.w('DJ fallback TTS init failed: $e');
     }
+  }
+
+  Future<Map<String, String>?> _pickFallbackMaleVoice() async {
+    final voices = await _fallbackTts.getVoices;
+    if (voices is! List) return null;
+
+    Map<dynamic, dynamic>? best;
+    var bestScore = -1;
+    for (final voice in voices) {
+      if (voice is! Map) continue;
+      final locale = (voice['locale'] ?? '').toString().toLowerCase();
+      if (!locale.startsWith('en')) continue;
+
+      final name = (voice['name'] ?? '').toString();
+      final lower = name.toLowerCase();
+      final gender = (voice['gender'] ?? '').toString().toLowerCase();
+
+      if (gender == 'female' || _isFemaleVoiceName(lower)) continue;
+      if (lower.contains('#female')) continue;
+
+      final isMale = gender == 'male' ||
+          lower.contains('#male') ||
+          _isPreferredMaleVoiceName(lower);
+      if (!isMale) continue;
+
+      var score = 0;
+      if (lower.contains('neural')) score += 50;
+      if (lower.contains('enhanced')) score += 40;
+      if (locale.contains('us')) score += 10;
+      if (lower.contains('andrew')) score += 80;
+      if (lower.contains('christopher')) score += 70;
+      if (lower.contains('guy')) score += 55;
+      if (gender == 'male') score += 30;
+      if (lower.contains('#male')) score += 25;
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = voice;
+      }
+    }
+
+    if (best == null) return null;
+    return <String, String>{
+      'name': best['name']?.toString() ?? '',
+      'locale': best['locale']?.toString() ?? 'en-US',
+    };
   }
 
   Future<void> speak(
@@ -108,16 +128,12 @@ class PersonalDjVoiceService {
 
     _speaking = true;
     try {
-      final bytes = await _edge.synthesize(
-        line,
-        rate: _rateFor(mood),
-        pitch: '+0Hz',
-      );
+      final bytes = await _synthesizeEdge(line, mood);
 
       if (bytes.isNotEmpty) {
         await _playMp3(bytes);
       } else {
-        appLogger.w('Edge DJ voice empty — using on-device fallback');
+        appLogger.w('Edge DJ voice empty — using on-device male fallback');
         await _speakFallback(line);
       }
     } catch (e) {
@@ -130,6 +146,27 @@ class PersonalDjVoiceService {
         await player.play();
       }
     }
+  }
+
+  Future<Uint8List> _synthesizeEdge(String line, PersonalDjMood mood) async {
+    for (final voice in WaveEdgeTts.preferredMaleVoices) {
+      try {
+        final bytes = await WaveEdgeTts(voice: voice).synthesize(
+          line,
+          rate: _rateFor(mood),
+          pitch: '-4Hz',
+        );
+        if (bytes.isNotEmpty) {
+          if (voice != WaveEdgeTts.defaultVoice) {
+            appLogger.w('DJ Edge voice fell back to $voice');
+          }
+          return bytes;
+        }
+      } catch (e) {
+        appLogger.w('Edge voice $voice failed: $e');
+      }
+    }
+    return Uint8List(0);
   }
 
   Future<void> _playMp3(Uint8List bytes) async {
@@ -172,15 +209,15 @@ class PersonalDjVoiceService {
         PersonalDjMood.mixed => '+20%',
       };
 
-  bool _isMaleVoiceName(String name) => <String>[
+  bool _isPreferredMaleVoiceName(String name) => <String>[
+        'andrew',
+        'christopher',
         'guy',
         'jason',
         'brian',
         'davis',
         'daniel',
         'eric',
-        'andrew',
-        'christopher',
         'tony',
         'steffan',
         'brandon',
@@ -200,6 +237,10 @@ class PersonalDjVoiceService {
         'jane',
         'nancy',
         'female',
+        'karen',
+        'samantha',
+        'victoria',
+        'zira',
       ].any(name.contains);
 
   Future<String> _writeTempMp3(Uint8List bytes) async {
