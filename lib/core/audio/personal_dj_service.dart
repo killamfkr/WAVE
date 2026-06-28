@@ -9,11 +9,14 @@ import 'similar_tracks_resolver.dart';
 
 enum PersonalDjMood { mixed, chill, hype, discover }
 
-/// Minimum duration (seconds) for chill picks — skips short singles.
-const int personalDjChillMinDuration = 210;
+/// Minimum duration (seconds) for chill picks — skips very short singles.
+const int personalDjChillMinDuration = 165;
 
-/// Chart rank above this is treated as too high-energy for chill.
+/// Chart rank above this is treated as too high-energy for chill (discovery).
 const int personalDjChillMaxRank = 480000;
+
+/// Relaxed rank ceiling for tracks already in the user's likes.
+const int personalDjChillLikedMaxRank = 800000;
 
 /// Minimum [PersonalDjService.chillScore] for a track to enter a chill queue.
 const double personalDjChillMinScore = 0.42;
@@ -117,7 +120,7 @@ class PersonalDjService {
       recentIds: recentIds,
     );
 
-    await _refineMoodTail(tail, mood);
+    await _refineMoodTail(tail, mood, likedIds: likedIds);
 
     _finalizeTailOrder(tail, mood);
 
@@ -184,7 +187,7 @@ class PersonalDjService {
       recentIds: recentIds,
     );
 
-    await _refineMoodTail(added, mood);
+    await _refineMoodTail(added, mood, likedIds: likedIds);
 
     _finalizeTailOrder(added, mood);
 
@@ -275,7 +278,10 @@ class PersonalDjService {
 
     var likedPool = _rankLikedForMood(liked, mood);
     if (mood == PersonalDjMood.chill) {
-      likedPool = await _filterChillTracks(likedPool.take(20).toList());
+      likedPool = await _filterChillTracks(
+        likedPool.take(30).toList(),
+        favorLiked: true,
+      );
     } else if (mood == PersonalDjMood.hype) {
       likedPool = await _filterHypeTracks(likedPool.take(24).toList());
     }
@@ -354,7 +360,10 @@ class PersonalDjService {
           if (seeds.length >= count) return _enrichBpm(seeds);
         }
       case PersonalDjMood.chill:
-        final chillPool = await _filterChillTracks(liked.take(30).toList());
+        final chillPool = await _filterChillTracks(
+          liked.take(50).toList(),
+          favorLiked: true,
+        );
         for (final track in chillPool) {
           tryAdd(track);
           if (seeds.length >= count) return _enrichBpm(seeds);
@@ -482,14 +491,25 @@ class PersonalDjService {
     }
   }
 
-  Future<void> _refineMoodTail(List<DeezerTrack> tail, PersonalDjMood mood) async {
+  Future<void> _refineMoodTail(
+    List<DeezerTrack> tail,
+    PersonalDjMood mood, {
+    Set<int> likedIds = const <int>{},
+  }) async {
     if (tail.isEmpty) return;
 
     switch (mood) {
       case PersonalDjMood.chill:
         final enriched = await _enrichBpm(tail);
         final refined = enriched
-            .where((t) => chillScore(t) >= personalDjChillMinScore - 0.08)
+            .where(
+              (t) =>
+                  chillScore(
+                    t,
+                    favorLiked: likedIds.contains(t.id),
+                  ) >=
+                  personalDjChillMinScore - 0.08,
+            )
             .toList();
         if (refined.isNotEmpty) {
           tail
@@ -531,7 +551,10 @@ class PersonalDjService {
     final pool = List<DeezerTrack>.from(liked);
     switch (mood) {
       case PersonalDjMood.chill:
-        pool.sort((a, b) => chillScore(b).compareTo(chillScore(a)));
+        pool.sort(
+          (a, b) => chillScore(b, favorLiked: true)
+              .compareTo(chillScore(a, favorLiked: true)),
+        );
       case PersonalDjMood.hype:
         pool.sort((a, b) => hypeScore(b).compareTo(hypeScore(a)));
       case PersonalDjMood.discover:
@@ -585,26 +608,37 @@ class PersonalDjService {
   List<DeezerTrack> _chillCandidates(
     List<DeezerTrack> tracks, {
     double minScore = personalDjChillMinScore,
+    bool favorLiked = false,
   }) {
-    final passing = tracks.where((t) => chillScore(t) >= minScore).toList()
-      ..sort((a, b) => chillScore(b).compareTo(chillScore(a)));
+    double score(DeezerTrack track) => chillScore(track, favorLiked: favorLiked);
+
+    final passing = tracks.where((t) => score(t) >= minScore).toList()
+      ..sort((a, b) => score(b).compareTo(score(a)));
     if (passing.isNotEmpty) return passing;
 
-    final relaxed = tracks.where((t) => chillScore(t) >= minScore - 0.12).toList()
-      ..sort((a, b) => chillScore(b).compareTo(chillScore(a)));
+    final relaxed = tracks.where((t) => score(t) >= minScore - 0.12).toList()
+      ..sort((a, b) => score(b).compareTo(score(a)));
     if (relaxed.isNotEmpty) return relaxed;
 
-    final salvage = tracks.where((t) => chillScore(t) >= 0).toList()
-      ..sort((a, b) => chillScore(b).compareTo(chillScore(a)));
+    final salvage = tracks.where((t) => score(t) >= 0).toList()
+      ..sort((a, b) => score(b).compareTo(score(a)));
     return salvage;
   }
 
   Future<List<DeezerTrack>> _filterChillTracks(
     List<DeezerTrack> tracks, {
     double minScore = personalDjChillMinScore,
+    bool favorLiked = false,
   }) async {
-    final enriched = await _enrichBpm(tracks);
-    return _chillCandidates(enriched, minScore: minScore);
+    final enriched = await _enrichBpm(
+      tracks,
+      maxFetches: favorLiked ? 40 : 28,
+    );
+    return _chillCandidates(
+      enriched,
+      minScore: minScore,
+      favorLiked: favorLiked,
+    );
   }
 
   List<DeezerTrack> _hypeCandidates(
@@ -684,20 +718,25 @@ class PersonalDjService {
   }
 
   /// Heuristic chill fit from tempo, duration, and chart rank (higher = mellower).
-  static double chillScore(DeezerTrack track) {
+  ///
+  /// [favorLiked] relaxes the chart-rank ceiling for songs you've already saved.
+  /// [_effectiveChillBpm] halves very high BPM readings (common for reggae/ska).
+  static double chillScore(DeezerTrack track, {bool favorLiked = false}) {
     final duration = track.duration ?? 0;
     if (duration < personalDjChillMinDuration) return -1;
 
     final rank = track.rank ?? 220000;
-    if (rank >= personalDjChillMaxRank) return -1;
+    final maxRank =
+        favorLiked ? personalDjChillLikedMaxRank : personalDjChillMaxRank;
+    if (rank >= maxRank) return -1;
 
-    final bpm = track.bpm ?? 0;
+    final bpm = _effectiveChillBpm(track.bpm ?? 0);
     if (bpm > personalDjChillMaxBpm) return -1;
 
     final durationScore =
         1.0 - ((duration - 285) / 210).abs().clamp(0.0, 1.0);
     final rankScore =
-        ((personalDjChillMaxRank - rank) / personalDjChillMaxRank).clamp(0.0, 1.0);
+        ((maxRank - rank) / maxRank).clamp(0.0, 1.0);
     final baseScore = durationScore * 0.2 + rankScore * 0.35;
 
     if (bpm <= 0) return baseScore;
@@ -705,6 +744,15 @@ class PersonalDjService {
     final bpmScore = _bpmChillScore(bpm);
     if (bpmScore < 0) return -1;
     return baseScore * 0.25 + bpmScore * 0.75;
+  }
+
+  /// Reggae/ska often reads as double-time on beat detectors — try half-tempo.
+  static double _effectiveChillBpm(double bpm) {
+    if (bpm <= 0) return 0;
+    if (bpm <= personalDjChillMaxBpm) return bpm;
+    final half = bpm / 2;
+    if (half <= personalDjChillMaxBpm) return half;
+    return bpm;
   }
 
   static double _bpmChillScore(double bpm) {
@@ -756,7 +804,9 @@ class PersonalDjService {
     required Set<int> recentIds,
   }) {
     return switch (mood) {
-      PersonalDjMood.chill => chillScore(track) >= personalDjChillMinScore,
+      PersonalDjMood.chill =>
+        chillScore(track, favorLiked: likedIds.contains(track.id)) >=
+            personalDjChillMinScore,
       PersonalDjMood.hype => hypeScore(track) >= personalDjHypeMinScore,
       PersonalDjMood.discover =>
         !likedIds.contains(track.id) && !recentIds.contains(track.id),
@@ -771,7 +821,8 @@ class PersonalDjService {
     Set<int> recentIds,
   ) {
     return switch (mood) {
-      PersonalDjMood.chill => chillScore(track),
+      PersonalDjMood.chill =>
+        chillScore(track, favorLiked: likedIds.contains(track.id)),
       PersonalDjMood.hype => hypeScore(track),
       PersonalDjMood.discover =>
         (likedIds.contains(track.id) ? -5.0 : 2.0) +
@@ -840,7 +891,7 @@ class PersonalDjService {
         PersonalDjMood.mixed =>
           'Balanced mix of favorites, recent plays, and similar tracks.',
         PersonalDjMood.chill =>
-          'Slower tempos and deeper cuts — skips fast tracks and chart bangers.',
+          'Slower tempos and your mellower likes — reggae-friendly, skips bangers.',
         PersonalDjMood.hype =>
           'Faster tempos and chart favorites — skips slow, long album cuts.',
         PersonalDjMood.discover =>

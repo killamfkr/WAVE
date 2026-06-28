@@ -31,7 +31,7 @@ void main() {
   group('chillScore', () {
     test('rejects short chart hits', () {
       expect(
-        PersonalDjService.chillScore(_track(id: 1, duration: 180, rank: 800000)),
+        PersonalDjService.chillScore(_track(id: 1, duration: 140, rank: 800000)),
         lessThan(0),
       );
       expect(
@@ -64,11 +64,32 @@ void main() {
         _track(id: 7, duration: 300, rank: 120000, bpm: 108),
       );
       final fast = PersonalDjService.chillScore(
-        _track(id: 8, duration: 300, rank: 120000, bpm: 128),
+        _track(id: 8, duration: 300, rank: 120000, bpm: 250),
       );
 
       expect(slow, greaterThan(mid));
       expect(fast, lessThan(0));
+    });
+
+    test('liked reggae passes with relaxed rank and half-tempo BPM', () {
+      final santeria = PersonalDjService.chillScore(
+        _track(id: 127245051, duration: 183, rank: 733983, bpm: 181.33),
+        favorLiked: true,
+      );
+      final whatIGot = PersonalDjService.chillScore(
+        _track(id: 127245037, duration: 171, rank: 621017, bpm: 95.7),
+        favorLiked: true,
+      );
+
+      expect(santeria, greaterThanOrEqualTo(personalDjChillMinScore - 0.08));
+      expect(whatIGot, greaterThanOrEqualTo(personalDjChillMinScore - 0.08));
+    });
+
+    test('popular liked tracks still fail without favorLiked', () {
+      final santeria = PersonalDjService.chillScore(
+        _track(id: 127245051, duration: 183, rank: 733983, bpm: 181.33),
+      );
+      expect(santeria, lessThan(0));
     });
   });
 
