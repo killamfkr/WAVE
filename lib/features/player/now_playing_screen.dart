@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -466,7 +467,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> {
               ),
             ],
           ),
-          if (Platform.isWindows || Platform.isLinux || Platform.isMacOS)
+          if (!kIsWeb &&
+              (Platform.isWindows || Platform.isLinux || Platform.isMacOS))
             Padding(
               padding: const EdgeInsets.only(top: 16),
               child: _DesktopVolumeSlider(player: player),

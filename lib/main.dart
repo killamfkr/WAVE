@@ -21,13 +21,10 @@ import 'core/api/lastfm_api_client.dart';
 import 'core/audio/dj_tts/dj_tts_env.dart';
 import 'core/audio/local_proxy.dart';
 import 'services/app_updater_service.dart';
+import 'core/app_messenger.dart';
 import 'widgets/theme_morph.dart';
 
 late final MediaKitMusicPlayerService _playerService;
-
-/// Global key for showing snackbars from anywhere without a local context.
-final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
-    GlobalKey<ScaffoldMessengerState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
