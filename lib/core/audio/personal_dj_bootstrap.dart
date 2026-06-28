@@ -17,6 +17,13 @@ class PersonalDjBootstrap extends ConsumerWidget {
         ref.read(personalDjProvider.notifier).onTrackChanged(track);
       }
     });
+    ref.listen(queueSnapshotProvider, (previous, next) {
+      final count = next.upcoming.length;
+      final prevCount = previous?.upcoming.length;
+      if (count != prevCount) {
+        ref.read(personalDjProvider.notifier).maybeRefillQueue(count);
+      }
+    });
     return const SizedBox.shrink();
   }
 }

@@ -19,16 +19,18 @@ class SimilarTracksResolver {
   Future<List<DeezerTrack>> resolve(
     DeezerTrack seed, {
     Set<int> excludeIds = const <int>{},
+    int limit = 15,
   }) async {
     final results = <DeezerTrack>[];
     final seen = <int>{...excludeIds};
+    final cap = limit.clamp(1, 40);
 
     void addTracks(Iterable<DeezerTrack> tracks) {
       for (final track in tracks) {
         if (seen.add(track.id)) {
           results.add(track);
         }
-        if (results.length >= 15) return;
+        if (results.length >= cap) return;
       }
     }
 
@@ -51,7 +53,7 @@ class SimilarTracksResolver {
             );
             addTracks(found);
           } catch (_) {}
-          if (results.length >= 15) break;
+          if (results.length >= cap) break;
         }
       } catch (e) {
         appLogger.w('Last.fm similar resolution failed: $e');
@@ -65,7 +67,7 @@ class SimilarTracksResolver {
         for (final artist in related.take(5)) {
           final tops = await _deezer.getArtistTopTracks(artist.id, limit: 5);
           addTracks(tops.where((t) => t.id != seed.id));
-          if (results.length >= 15) break;
+          if (results.length >= cap) break;
         }
       } catch (e) {
         appLogger.w('Related-artist similar resolution failed: $e');
@@ -93,6 +95,6 @@ class SimilarTracksResolver {
     if (results.length > 1) {
       results.shuffle(Random());
     }
-    return results.take(15).toList(growable: false);
+    return results.take(cap).toList(growable: false);
   }
 }
