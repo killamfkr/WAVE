@@ -2,11 +2,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:wave/core/api/models/deezer_track.dart';
 import 'package:wave/core/audio/personal_dj_service.dart';
 
-DeezerTrack _track({required int id, int? duration, int? rank}) => DeezerTrack(
+DeezerTrack _track({required int id, int? duration, int? rank, double? bpm}) =>
+    DeezerTrack(
       id: id,
       title: 'Track $id',
       duration: duration,
       rank: rank,
+      bpm: bpm,
     );
 
 void main() {
@@ -52,6 +54,21 @@ void main() {
       expect(deepCut, greaterThan(personalDjChillMinScore));
       expect(chartHit, lessThan(0));
       expect(deepCut, greaterThan(shortSingle));
+    });
+
+    test('prefers slower BPM when tempo is known', () {
+      final slow = PersonalDjService.chillScore(
+        _track(id: 6, duration: 300, rank: 120000, bpm: 78),
+      );
+      final mid = PersonalDjService.chillScore(
+        _track(id: 7, duration: 300, rank: 120000, bpm: 108),
+      );
+      final fast = PersonalDjService.chillScore(
+        _track(id: 8, duration: 300, rank: 120000, bpm: 128),
+      );
+
+      expect(slow, greaterThan(mid));
+      expect(fast, lessThan(0));
     });
   });
 }

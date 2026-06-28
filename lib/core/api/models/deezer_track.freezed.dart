@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$DeezerTrack {
 
- int get id; String get title;@JsonKey(name: 'title_short') String? get titleShort;@JsonKey(name: 'title_version') String? get titleVersion; String? get link; int? get duration; int? get rank;@JsonKey(name: 'explicit_lyrics', fromJson: boolFromJson, toJson: boolToJson) bool? get explicitLyrics; String? get preview; DeezerArtist? get artist; DeezerAlbum? get album;
+ int get id; String get title;@JsonKey(name: 'title_short') String? get titleShort;@JsonKey(name: 'title_version') String? get titleVersion; String? get link; int? get duration; int? get rank; double? get bpm;@JsonKey(name: 'explicit_lyrics', fromJson: boolFromJson, toJson: boolToJson) bool? get explicitLyrics; String? get preview; DeezerArtist? get artist; DeezerAlbum? get album;
 /// Create a copy of DeezerTrack
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $DeezerTrackCopyWith<DeezerTrack> get copyWith => _$DeezerTrackCopyWithImpl<Deez
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is DeezerTrack&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.titleShort, titleShort) || other.titleShort == titleShort)&&(identical(other.titleVersion, titleVersion) || other.titleVersion == titleVersion)&&(identical(other.link, link) || other.link == link)&&(identical(other.duration, duration) || other.duration == duration)&&(identical(other.rank, rank) || other.rank == rank)&&(identical(other.explicitLyrics, explicitLyrics) || other.explicitLyrics == explicitLyrics)&&(identical(other.preview, preview) || other.preview == preview)&&(identical(other.artist, artist) || other.artist == artist)&&(identical(other.album, album) || other.album == album));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is DeezerTrack&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.titleShort, titleShort) || other.titleShort == titleShort)&&(identical(other.titleVersion, titleVersion) || other.titleVersion == titleVersion)&&(identical(other.link, link) || other.link == link)&&(identical(other.duration, duration) || other.duration == duration)&&(identical(other.rank, rank) || other.rank == rank)&&(identical(other.bpm, bpm) || other.bpm == bpm)&&(identical(other.explicitLyrics, explicitLyrics) || other.explicitLyrics == explicitLyrics)&&(identical(other.preview, preview) || other.preview == preview)&&(identical(other.artist, artist) || other.artist == artist)&&(identical(other.album, album) || other.album == album));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,title,titleShort,titleVersion,link,duration,rank,explicitLyrics,preview,artist,album);
+int get hashCode => Object.hash(runtimeType,id,title,titleShort,titleVersion,link,duration,rank,bpm,explicitLyrics,preview,artist,album);
 
 @override
 String toString() {
-  return 'DeezerTrack(id: $id, title: $title, titleShort: $titleShort, titleVersion: $titleVersion, link: $link, duration: $duration, rank: $rank, explicitLyrics: $explicitLyrics, preview: $preview, artist: $artist, album: $album)';
+  return 'DeezerTrack(id: $id, title: $title, titleShort: $titleShort, titleVersion: $titleVersion, link: $link, duration: $duration, rank: $rank, bpm: $bpm, explicitLyrics: $explicitLyrics, preview: $preview, artist: $artist, album: $album)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $DeezerTrackCopyWith<$Res>  {
   factory $DeezerTrackCopyWith(DeezerTrack value, $Res Function(DeezerTrack) _then) = _$DeezerTrackCopyWithImpl;
 @useResult
 $Res call({
- int id, String title,@JsonKey(name: 'title_short') String? titleShort,@JsonKey(name: 'title_version') String? titleVersion, String? link, int? duration, int? rank,@JsonKey(name: 'explicit_lyrics', fromJson: boolFromJson, toJson: boolToJson) bool? explicitLyrics, String? preview, DeezerArtist? artist, DeezerAlbum? album
+ int id, String title,@JsonKey(name: 'title_short') String? titleShort,@JsonKey(name: 'title_version') String? titleVersion, String? link, int? duration, int? rank, double? bpm,@JsonKey(name: 'explicit_lyrics', fromJson: boolFromJson, toJson: boolToJson) bool? explicitLyrics, String? preview, DeezerArtist? artist, DeezerAlbum? album
 });
 
 
@@ -65,7 +65,7 @@ class _$DeezerTrackCopyWithImpl<$Res>
 
 /// Create a copy of DeezerTrack
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? title = null,Object? titleShort = freezed,Object? titleVersion = freezed,Object? link = freezed,Object? duration = freezed,Object? rank = freezed,Object? explicitLyrics = freezed,Object? preview = freezed,Object? artist = freezed,Object? album = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? title = null,Object? titleShort = freezed,Object? titleVersion = freezed,Object? link = freezed,Object? duration = freezed,Object? rank = freezed,Object? bpm = freezed,Object? explicitLyrics = freezed,Object? preview = freezed,Object? artist = freezed,Object? album = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
@@ -74,7 +74,8 @@ as String?,titleVersion: freezed == titleVersion ? _self.titleVersion : titleVer
 as String?,link: freezed == link ? _self.link : link // ignore: cast_nullable_to_non_nullable
 as String?,duration: freezed == duration ? _self.duration : duration // ignore: cast_nullable_to_non_nullable
 as int?,rank: freezed == rank ? _self.rank : rank // ignore: cast_nullable_to_non_nullable
-as int?,explicitLyrics: freezed == explicitLyrics ? _self.explicitLyrics : explicitLyrics // ignore: cast_nullable_to_non_nullable
+as int?,bpm: freezed == bpm ? _self.bpm : bpm // ignore: cast_nullable_to_non_nullable
+as double?,explicitLyrics: freezed == explicitLyrics ? _self.explicitLyrics : explicitLyrics // ignore: cast_nullable_to_non_nullable
 as bool?,preview: freezed == preview ? _self.preview : preview // ignore: cast_nullable_to_non_nullable
 as String?,artist: freezed == artist ? _self.artist : artist // ignore: cast_nullable_to_non_nullable
 as DeezerArtist?,album: freezed == album ? _self.album : album // ignore: cast_nullable_to_non_nullable
@@ -187,10 +188,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  String title, @JsonKey(name: 'title_short')  String? titleShort, @JsonKey(name: 'title_version')  String? titleVersion,  String? link,  int? duration,  int? rank, @JsonKey(name: 'explicit_lyrics', fromJson: boolFromJson, toJson: boolToJson)  bool? explicitLyrics,  String? preview,  DeezerArtist? artist,  DeezerAlbum? album)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  String title, @JsonKey(name: 'title_short')  String? titleShort, @JsonKey(name: 'title_version')  String? titleVersion,  String? link,  int? duration,  int? rank,  double? bpm, @JsonKey(name: 'explicit_lyrics', fromJson: boolFromJson, toJson: boolToJson)  bool? explicitLyrics,  String? preview,  DeezerArtist? artist,  DeezerAlbum? album)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _DeezerTrack() when $default != null:
-return $default(_that.id,_that.title,_that.titleShort,_that.titleVersion,_that.link,_that.duration,_that.rank,_that.explicitLyrics,_that.preview,_that.artist,_that.album);case _:
+return $default(_that.id,_that.title,_that.titleShort,_that.titleVersion,_that.link,_that.duration,_that.rank,_that.bpm,_that.explicitLyrics,_that.preview,_that.artist,_that.album);case _:
   return orElse();
 
 }
@@ -208,10 +209,10 @@ return $default(_that.id,_that.title,_that.titleShort,_that.titleVersion,_that.l
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  String title, @JsonKey(name: 'title_short')  String? titleShort, @JsonKey(name: 'title_version')  String? titleVersion,  String? link,  int? duration,  int? rank, @JsonKey(name: 'explicit_lyrics', fromJson: boolFromJson, toJson: boolToJson)  bool? explicitLyrics,  String? preview,  DeezerArtist? artist,  DeezerAlbum? album)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  String title, @JsonKey(name: 'title_short')  String? titleShort, @JsonKey(name: 'title_version')  String? titleVersion,  String? link,  int? duration,  int? rank,  double? bpm, @JsonKey(name: 'explicit_lyrics', fromJson: boolFromJson, toJson: boolToJson)  bool? explicitLyrics,  String? preview,  DeezerArtist? artist,  DeezerAlbum? album)  $default,) {final _that = this;
 switch (_that) {
 case _DeezerTrack():
-return $default(_that.id,_that.title,_that.titleShort,_that.titleVersion,_that.link,_that.duration,_that.rank,_that.explicitLyrics,_that.preview,_that.artist,_that.album);case _:
+return $default(_that.id,_that.title,_that.titleShort,_that.titleVersion,_that.link,_that.duration,_that.rank,_that.bpm,_that.explicitLyrics,_that.preview,_that.artist,_that.album);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -228,10 +229,10 @@ return $default(_that.id,_that.title,_that.titleShort,_that.titleVersion,_that.l
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  String title, @JsonKey(name: 'title_short')  String? titleShort, @JsonKey(name: 'title_version')  String? titleVersion,  String? link,  int? duration,  int? rank, @JsonKey(name: 'explicit_lyrics', fromJson: boolFromJson, toJson: boolToJson)  bool? explicitLyrics,  String? preview,  DeezerArtist? artist,  DeezerAlbum? album)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  String title, @JsonKey(name: 'title_short')  String? titleShort, @JsonKey(name: 'title_version')  String? titleVersion,  String? link,  int? duration,  int? rank,  double? bpm, @JsonKey(name: 'explicit_lyrics', fromJson: boolFromJson, toJson: boolToJson)  bool? explicitLyrics,  String? preview,  DeezerArtist? artist,  DeezerAlbum? album)?  $default,) {final _that = this;
 switch (_that) {
 case _DeezerTrack() when $default != null:
-return $default(_that.id,_that.title,_that.titleShort,_that.titleVersion,_that.link,_that.duration,_that.rank,_that.explicitLyrics,_that.preview,_that.artist,_that.album);case _:
+return $default(_that.id,_that.title,_that.titleShort,_that.titleVersion,_that.link,_that.duration,_that.rank,_that.bpm,_that.explicitLyrics,_that.preview,_that.artist,_that.album);case _:
   return null;
 
 }
@@ -243,7 +244,7 @@ return $default(_that.id,_that.title,_that.titleShort,_that.titleVersion,_that.l
 @JsonSerializable()
 
 class _DeezerTrack implements DeezerTrack {
-  const _DeezerTrack({required this.id, required this.title, @JsonKey(name: 'title_short') this.titleShort, @JsonKey(name: 'title_version') this.titleVersion, this.link, this.duration, this.rank, @JsonKey(name: 'explicit_lyrics', fromJson: boolFromJson, toJson: boolToJson) this.explicitLyrics, this.preview, this.artist, this.album});
+  const _DeezerTrack({required this.id, required this.title, @JsonKey(name: 'title_short') this.titleShort, @JsonKey(name: 'title_version') this.titleVersion, this.link, this.duration, this.rank, this.bpm, @JsonKey(name: 'explicit_lyrics', fromJson: boolFromJson, toJson: boolToJson) this.explicitLyrics, this.preview, this.artist, this.album});
   factory _DeezerTrack.fromJson(Map<String, dynamic> json) => _$DeezerTrackFromJson(json);
 
 @override final  int id;
@@ -253,6 +254,7 @@ class _DeezerTrack implements DeezerTrack {
 @override final  String? link;
 @override final  int? duration;
 @override final  int? rank;
+@override final  double? bpm;
 @override@JsonKey(name: 'explicit_lyrics', fromJson: boolFromJson, toJson: boolToJson) final  bool? explicitLyrics;
 @override final  String? preview;
 @override final  DeezerArtist? artist;
@@ -271,16 +273,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _DeezerTrack&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.titleShort, titleShort) || other.titleShort == titleShort)&&(identical(other.titleVersion, titleVersion) || other.titleVersion == titleVersion)&&(identical(other.link, link) || other.link == link)&&(identical(other.duration, duration) || other.duration == duration)&&(identical(other.rank, rank) || other.rank == rank)&&(identical(other.explicitLyrics, explicitLyrics) || other.explicitLyrics == explicitLyrics)&&(identical(other.preview, preview) || other.preview == preview)&&(identical(other.artist, artist) || other.artist == artist)&&(identical(other.album, album) || other.album == album));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _DeezerTrack&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.titleShort, titleShort) || other.titleShort == titleShort)&&(identical(other.titleVersion, titleVersion) || other.titleVersion == titleVersion)&&(identical(other.link, link) || other.link == link)&&(identical(other.duration, duration) || other.duration == duration)&&(identical(other.rank, rank) || other.rank == rank)&&(identical(other.bpm, bpm) || other.bpm == bpm)&&(identical(other.explicitLyrics, explicitLyrics) || other.explicitLyrics == explicitLyrics)&&(identical(other.preview, preview) || other.preview == preview)&&(identical(other.artist, artist) || other.artist == artist)&&(identical(other.album, album) || other.album == album));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,id,title,titleShort,titleVersion,link,duration,rank,explicitLyrics,preview,artist,album);
+int get hashCode => Object.hash(runtimeType,id,title,titleShort,titleVersion,link,duration,rank,bpm,explicitLyrics,preview,artist,album);
 
 @override
 String toString() {
-  return 'DeezerTrack(id: $id, title: $title, titleShort: $titleShort, titleVersion: $titleVersion, link: $link, duration: $duration, rank: $rank, explicitLyrics: $explicitLyrics, preview: $preview, artist: $artist, album: $album)';
+  return 'DeezerTrack(id: $id, title: $title, titleShort: $titleShort, titleVersion: $titleVersion, link: $link, duration: $duration, rank: $rank, bpm: $bpm, explicitLyrics: $explicitLyrics, preview: $preview, artist: $artist, album: $album)';
 }
 
 
@@ -291,7 +293,7 @@ abstract mixin class _$DeezerTrackCopyWith<$Res> implements $DeezerTrackCopyWith
   factory _$DeezerTrackCopyWith(_DeezerTrack value, $Res Function(_DeezerTrack) _then) = __$DeezerTrackCopyWithImpl;
 @override @useResult
 $Res call({
- int id, String title,@JsonKey(name: 'title_short') String? titleShort,@JsonKey(name: 'title_version') String? titleVersion, String? link, int? duration, int? rank,@JsonKey(name: 'explicit_lyrics', fromJson: boolFromJson, toJson: boolToJson) bool? explicitLyrics, String? preview, DeezerArtist? artist, DeezerAlbum? album
+ int id, String title,@JsonKey(name: 'title_short') String? titleShort,@JsonKey(name: 'title_version') String? titleVersion, String? link, int? duration, int? rank, double? bpm,@JsonKey(name: 'explicit_lyrics', fromJson: boolFromJson, toJson: boolToJson) bool? explicitLyrics, String? preview, DeezerArtist? artist, DeezerAlbum? album
 });
 
 
@@ -308,7 +310,7 @@ class __$DeezerTrackCopyWithImpl<$Res>
 
 /// Create a copy of DeezerTrack
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? title = null,Object? titleShort = freezed,Object? titleVersion = freezed,Object? link = freezed,Object? duration = freezed,Object? rank = freezed,Object? explicitLyrics = freezed,Object? preview = freezed,Object? artist = freezed,Object? album = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? title = null,Object? titleShort = freezed,Object? titleVersion = freezed,Object? link = freezed,Object? duration = freezed,Object? rank = freezed,Object? bpm = freezed,Object? explicitLyrics = freezed,Object? preview = freezed,Object? artist = freezed,Object? album = freezed,}) {
   return _then(_DeezerTrack(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,title: null == title ? _self.title : title // ignore: cast_nullable_to_non_nullable
@@ -317,7 +319,8 @@ as String?,titleVersion: freezed == titleVersion ? _self.titleVersion : titleVer
 as String?,link: freezed == link ? _self.link : link // ignore: cast_nullable_to_non_nullable
 as String?,duration: freezed == duration ? _self.duration : duration // ignore: cast_nullable_to_non_nullable
 as int?,rank: freezed == rank ? _self.rank : rank // ignore: cast_nullable_to_non_nullable
-as int?,explicitLyrics: freezed == explicitLyrics ? _self.explicitLyrics : explicitLyrics // ignore: cast_nullable_to_non_nullable
+as int?,bpm: freezed == bpm ? _self.bpm : bpm // ignore: cast_nullable_to_non_nullable
+as double?,explicitLyrics: freezed == explicitLyrics ? _self.explicitLyrics : explicitLyrics // ignore: cast_nullable_to_non_nullable
 as bool?,preview: freezed == preview ? _self.preview : preview // ignore: cast_nullable_to_non_nullable
 as String?,artist: freezed == artist ? _self.artist : artist // ignore: cast_nullable_to_non_nullable
 as DeezerArtist?,album: freezed == album ? _self.album : album // ignore: cast_nullable_to_non_nullable

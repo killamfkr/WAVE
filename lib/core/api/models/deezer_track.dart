@@ -18,6 +18,7 @@ abstract class DeezerTrack with _$DeezerTrack {
     String? link,
     int? duration,
     int? rank,
+    double? bpm,
     @JsonKey(name: 'explicit_lyrics', fromJson: boolFromJson, toJson: boolToJson) bool? explicitLyrics,
     String? preview,
     DeezerArtist? artist,

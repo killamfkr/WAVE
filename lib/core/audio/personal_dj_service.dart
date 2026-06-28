@@ -18,6 +18,9 @@ const int personalDjChillMaxRank = 480000;
 /// Minimum [PersonalDjService.chillScore] for a track to enter a chill queue.
 const double personalDjChillMinScore = 0.42;
 
+/// Tracks above this BPM are excluded from chill (when BPM is known).
+const double personalDjChillMaxBpm = 118;
+
 /// Target length for an initial DJ session queue.
 const int personalDjQueueTarget = 50;
 
@@ -52,6 +55,7 @@ class PersonalDjService {
   final SimilarTracksResolver _similar;
   final DeezerApiClient _deezer;
   final _rng = Random();
+  final _bpmCache = <int, double>{};
 
   Future<PersonalDjSession> buildSession({
     required List<DeezerTrack> liked,
@@ -68,7 +72,13 @@ class PersonalDjService {
       likedIds: likedIds,
       recentIds: recentIds,
     );
-    final seed = _pickOpenerSeed(seeds, mood, likedIds, recentIds);
+    var seed = _pickOpenerSeed(seeds, mood, likedIds, recentIds);
+    if (mood == PersonalDjMood.chill) {
+      final enrichedSeed = await _withKnownBpm(seed);
+      if (chillScore(enrichedSeed) >= personalDjChillMinScore - 0.08) {
+        seed = enrichedSeed;
+      }
+    }
     final orderedSeeds = <DeezerTrack>[seed, ...seeds.where((t) => t.id != seed.id)];
     final exclude = <int>{seed.id};
     final tail = <DeezerTrack>[];
@@ -94,6 +104,15 @@ class PersonalDjService {
       likedIds: likedIds,
       recentIds: recentIds,
     );
+
+    if (mood == PersonalDjMood.chill && tail.isNotEmpty) {
+      final enriched = await _enrichChillBpm(tail);
+      tail
+        ..clear()
+        ..addAll(
+          enriched.where((t) => chillScore(t) >= personalDjChillMinScore - 0.08),
+        );
+    }
 
     _finalizeTailOrder(tail, mood);
 
@@ -160,6 +179,15 @@ class PersonalDjService {
       recentIds: recentIds,
     );
 
+    if (mood == PersonalDjMood.chill && added.isNotEmpty) {
+      final enriched = await _enrichChillBpm(added);
+      added
+        ..clear()
+        ..addAll(
+          enriched.where((t) => chillScore(t) >= personalDjChillMinScore - 0.08),
+        );
+    }
+
     _finalizeTailOrder(added, mood);
 
     return added.take(target).toList(growable: false);
@@ -183,21 +211,25 @@ class PersonalDjService {
         excludeIds: exclude,
         limit: similarPerSeed + 6,
       );
-      final filtered = _filterForMood(
-        similar,
-        mood,
-        likedIds: likedIds,
-        recentIds: recentIds,
-        strict: mood != PersonalDjMood.chill,
-      );
-      var candidates = filtered.isEmpty
-          ? similar
-          : filtered.length >= 4
-              ? filtered
-              : <DeezerTrack>[...filtered, ...similar.where((t) => !filtered.contains(t))];
-
+      List<DeezerTrack> candidates;
       if (mood == PersonalDjMood.chill) {
-        candidates = _chillCandidates(candidates);
+        candidates = await _filterChillTracks(similar);
+      } else {
+        final filtered = _filterForMood(
+          similar,
+          mood,
+          likedIds: likedIds,
+          recentIds: recentIds,
+          strict: true,
+        );
+        candidates = filtered.isEmpty
+            ? similar
+            : filtered.length >= 4
+                ? filtered
+                : <DeezerTrack>[
+                    ...filtered,
+                    ...similar.where((t) => !filtered.contains(t)),
+                  ];
       }
 
       for (final track in candidates) {
@@ -235,7 +267,10 @@ class PersonalDjService {
       PersonalDjMood.discover => 0,
     };
 
-    final likedPool = _rankLikedForMood(liked, mood);
+    var likedPool = _rankLikedForMood(liked, mood);
+    if (mood == PersonalDjMood.chill) {
+      likedPool = await _filterChillTracks(likedPool.take(20).toList());
+    }
     for (final track in likedPool.take(likedCap)) {
       if (into.length >= target) return;
       if (!_trackFitsMood(track, mood, likedIds: likedIds, recentIds: recentIds)) {
@@ -312,19 +347,10 @@ class PersonalDjService {
           if (seeds.length >= count) return seeds;
         }
       case PersonalDjMood.chill:
-        final chillPool = List<DeezerTrack>.from(liked)
-          ..removeWhere(
-            (track) => !_trackFitsMood(
-              track,
-              mood,
-              likedIds: likedIds,
-              recentIds: recentIds,
-            ),
-          )
-          ..sort((a, b) => chillScore(b).compareTo(chillScore(a)));
+        final chillPool = await _filterChillTracks(liked);
         for (final track in chillPool) {
           tryAdd(track);
-          if (seeds.length >= count) return seeds;
+          if (seeds.length >= count) return _enrichChillBpm(seeds);
         }
       case PersonalDjMood.mixed:
         final mixedPool = List<DeezerTrack>.from(liked)..shuffle(_rng);
@@ -359,8 +385,10 @@ class PersonalDjService {
     if (seeds.length < count) {
       try {
         final chart = await _deezer.getChartTracks(limit: 30);
-        final chartPool = _rankChartForMood(chart, mood);
-        if (mood != PersonalDjMood.chill) {
+        var chartPool = _rankChartForMood(chart, mood);
+        if (mood == PersonalDjMood.chill) {
+          chartPool = await _filterChillTracks(chartPool);
+        } else {
           chartPool.shuffle(_rng);
         }
         for (final track in chartPool) {
@@ -374,6 +402,10 @@ class PersonalDjService {
 
     if (seeds.isEmpty) {
       throw StateError('Could not build a DJ session — no tracks available.');
+    }
+
+    if (mood == PersonalDjMood.chill) {
+      return _enrichChillBpm(seeds);
     }
 
     return seeds;
@@ -457,7 +489,66 @@ class PersonalDjService {
     return relaxed;
   }
 
-  /// Heuristic chill fit from duration and chart rank (higher = mellower).
+  Future<List<DeezerTrack>> _filterChillTracks(
+    List<DeezerTrack> tracks, {
+    double minScore = personalDjChillMinScore,
+  }) async {
+    final enriched = await _enrichChillBpm(tracks);
+    return _chillCandidates(enriched, minScore: minScore);
+  }
+
+  Future<DeezerTrack> _withKnownBpm(DeezerTrack track) async {
+    final cached = track.bpm ?? _bpmCache[track.id];
+    if (cached != null && cached > 0) {
+      return track.bpm == cached ? track : track.copyWith(bpm: cached);
+    }
+
+    try {
+      final full = await _deezer.getTrack(track.id);
+      final bpm = full.bpm ?? 0;
+      if (bpm > 0) _bpmCache[track.id] = bpm;
+      return bpm > 0 ? track.copyWith(bpm: bpm) : track;
+    } catch (e) {
+      appLogger.w('DJ chill: could not load BPM for ${track.id}: $e');
+      return track;
+    }
+  }
+
+  Future<List<DeezerTrack>> _enrichChillBpm(
+    List<DeezerTrack> tracks, {
+    int maxFetches = 28,
+  }) async {
+    final updated = List<DeezerTrack>.from(tracks);
+    final pending = <int>[];
+
+    for (var i = 0; i < updated.length; i++) {
+      final track = updated[i];
+      final known = track.bpm ?? _bpmCache[track.id];
+      if (known != null && known > 0) {
+        if (track.bpm != known) {
+          updated[i] = track.copyWith(bpm: known);
+        }
+        continue;
+      }
+      if (pending.length < maxFetches) {
+        pending.add(i);
+      }
+    }
+
+    for (var start = 0; start < pending.length; start += 6) {
+      final batch = pending.skip(start).take(6).toList();
+      final results = await Future.wait(
+        batch.map((index) async => MapEntry(index, await _withKnownBpm(updated[index]))),
+      );
+      for (final entry in results) {
+        updated[entry.key] = entry.value;
+      }
+    }
+
+    return updated;
+  }
+
+  /// Heuristic chill fit from tempo, duration, and chart rank (higher = mellower).
   static double chillScore(DeezerTrack track) {
     final duration = track.duration ?? 0;
     if (duration < personalDjChillMinDuration) return -1;
@@ -465,12 +556,27 @@ class PersonalDjService {
     final rank = track.rank ?? 220000;
     if (rank >= personalDjChillMaxRank) return -1;
 
+    final bpm = track.bpm ?? 0;
+    if (bpm > personalDjChillMaxBpm) return -1;
+
     final durationScore =
         1.0 - ((duration - 285) / 210).abs().clamp(0.0, 1.0);
     final rankScore =
         ((personalDjChillMaxRank - rank) / personalDjChillMaxRank).clamp(0.0, 1.0);
+    final baseScore = durationScore * 0.2 + rankScore * 0.35;
 
-    return durationScore * 0.3 + rankScore * 0.7;
+    if (bpm <= 0) return baseScore;
+
+    final bpmScore = _bpmChillScore(bpm);
+    if (bpmScore < 0) return -1;
+    return baseScore * 0.25 + bpmScore * 0.75;
+  }
+
+  static double _bpmChillScore(double bpm) {
+    if (bpm > personalDjChillMaxBpm) return -1;
+    if (bpm <= 92) return 1.0;
+    if (bpm <= 105) return 1.0 - (bpm - 92) / 26;
+    return 1.0 - (bpm - 92) / 18;
   }
 
   bool _trackFitsMood(
@@ -570,7 +676,7 @@ class PersonalDjService {
         PersonalDjMood.mixed =>
           'Balanced mix of favorites, recent plays, and similar tracks.',
         PersonalDjMood.chill =>
-          'Deeper cuts and longer tracks — skips chart bangers and short singles.',
+          'Slower tempos and deeper cuts — skips fast tracks and chart bangers.',
         PersonalDjMood.hype =>
           'High-energy favorites and chart-rising picks.',
         PersonalDjMood.discover =>
