@@ -1,5 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wave/core/api/models/deezer_track.dart';
 import 'package:wave/core/audio/personal_dj_service.dart';
+
+DeezerTrack _track({required int id, int? duration, int? rank}) => DeezerTrack(
+      id: id,
+      title: 'Track $id',
+      duration: duration,
+      rank: rank,
+    );
 
 void main() {
   group('PersonalDjMood copy', () {
@@ -15,6 +23,35 @@ void main() {
           .map(PersonalDjService.moodDescription)
           .toSet();
       expect(descriptions.length, PersonalDjMood.values.length);
+    });
+  });
+
+  group('chillScore', () {
+    test('rejects short chart hits', () {
+      expect(
+        PersonalDjService.chillScore(_track(id: 1, duration: 180, rank: 800000)),
+        lessThan(0),
+      );
+      expect(
+        PersonalDjService.chillScore(_track(id: 2, duration: 150, rank: 200000)),
+        lessThan(0),
+      );
+    });
+
+    test('prefers longer deep cuts over chart singles', () {
+      final deepCut = PersonalDjService.chillScore(
+        _track(id: 3, duration: 300, rank: 120000),
+      );
+      final chartHit = PersonalDjService.chillScore(
+        _track(id: 4, duration: 300, rank: 700000),
+      );
+      final shortSingle = PersonalDjService.chillScore(
+        _track(id: 5, duration: 200, rank: 150000),
+      );
+
+      expect(deepCut, greaterThan(personalDjChillMinScore));
+      expect(chartHit, lessThan(0));
+      expect(deepCut, greaterThan(shortSingle));
     });
   });
 }

@@ -9,6 +9,15 @@ import 'similar_tracks_resolver.dart';
 
 enum PersonalDjMood { mixed, chill, hype, discover }
 
+/// Minimum duration (seconds) for chill picks — skips short singles.
+const int personalDjChillMinDuration = 210;
+
+/// Chart rank above this is treated as too high-energy for chill.
+const int personalDjChillMaxRank = 480000;
+
+/// Minimum [PersonalDjService.chillScore] for a track to enter a chill queue.
+const double personalDjChillMinScore = 0.42;
+
 /// Target length for an initial DJ session queue.
 const int personalDjQueueTarget = 50;
 
@@ -179,13 +188,17 @@ class PersonalDjService {
         mood,
         likedIds: likedIds,
         recentIds: recentIds,
-        strict: true,
+        strict: mood != PersonalDjMood.chill,
       );
-      final candidates = filtered.isEmpty
+      var candidates = filtered.isEmpty
           ? similar
           : filtered.length >= 4
               ? filtered
               : <DeezerTrack>[...filtered, ...similar.where((t) => !filtered.contains(t))];
+
+      if (mood == PersonalDjMood.chill) {
+        candidates = _chillCandidates(candidates);
+      }
 
       for (final track in candidates) {
         if (into.length >= target) return;
@@ -216,7 +229,7 @@ class PersonalDjService {
     }
 
     final likedCap = switch (mood) {
-      PersonalDjMood.chill => 18,
+      PersonalDjMood.chill => 14,
       PersonalDjMood.hype => 22,
       PersonalDjMood.mixed => 20,
       PersonalDjMood.discover => 0,
@@ -234,7 +247,7 @@ class PersonalDjService {
     }
 
     final recentCap = switch (mood) {
-      PersonalDjMood.chill => 6,
+      PersonalDjMood.chill => 3,
       PersonalDjMood.hype => 10,
       PersonalDjMood.mixed => 12,
       PersonalDjMood.discover => 0,
@@ -300,7 +313,15 @@ class PersonalDjService {
         }
       case PersonalDjMood.chill:
         final chillPool = List<DeezerTrack>.from(liked)
-          ..sort((a, b) => (b.duration ?? 0).compareTo(a.duration ?? 0));
+          ..removeWhere(
+            (track) => !_trackFitsMood(
+              track,
+              mood,
+              likedIds: likedIds,
+              recentIds: recentIds,
+            ),
+          )
+          ..sort((a, b) => chillScore(b).compareTo(chillScore(a)));
         for (final track in chillPool) {
           tryAdd(track);
           if (seeds.length >= count) return seeds;
@@ -315,9 +336,21 @@ class PersonalDjService {
 
     for (final entry in recent.where((e) => e.kind == 'track')) {
       if (seeds.length >= count) break;
-      if (mood == PersonalDjMood.discover && likedIds.contains(entry.id)) continue;
+      if (mood == PersonalDjMood.discover && likedIds.contains(entry.id)) {
+        continue;
+      }
       try {
-        tryAdd(await _deezer.getTrack(entry.id));
+        final track = await _deezer.getTrack(entry.id);
+        if (mood == PersonalDjMood.chill &&
+            !_trackFitsMood(
+              track,
+              mood,
+              likedIds: likedIds,
+              recentIds: recentIds,
+            )) {
+          continue;
+        }
+        tryAdd(track);
       } catch (e) {
         appLogger.w('DJ seed: could not load recent track ${entry.id}: $e');
       }
@@ -326,7 +359,10 @@ class PersonalDjService {
     if (seeds.length < count) {
       try {
         final chart = await _deezer.getChartTracks(limit: 30);
-        final chartPool = _rankChartForMood(chart, mood)..shuffle(_rng);
+        final chartPool = _rankChartForMood(chart, mood);
+        if (mood != PersonalDjMood.chill) {
+          chartPool.shuffle(_rng);
+        }
         for (final track in chartPool) {
           tryAdd(track);
           if (seeds.length >= count) break;
@@ -362,7 +398,7 @@ class PersonalDjService {
     final pool = List<DeezerTrack>.from(liked);
     switch (mood) {
       case PersonalDjMood.chill:
-        pool.sort((a, b) => (b.duration ?? 0).compareTo(a.duration ?? 0));
+        pool.sort((a, b) => chillScore(b).compareTo(chillScore(a)));
       case PersonalDjMood.hype:
         pool.sort((a, b) => (b.rank ?? 0).compareTo(a.rank ?? 0));
       case PersonalDjMood.discover:
@@ -379,7 +415,9 @@ class PersonalDjService {
       case PersonalDjMood.hype:
         pool.sort((a, b) => (b.rank ?? 0).compareTo(a.rank ?? 0));
       case PersonalDjMood.chill:
-        pool.sort((a, b) => (b.duration ?? 0).compareTo(a.duration ?? 0));
+        pool
+          ..removeWhere((track) => chillScore(track) < personalDjChillMinScore)
+          ..sort((a, b) => chillScore(b).compareTo(chillScore(a)));
       case PersonalDjMood.discover:
         pool.sort((a, b) => (a.rank ?? 999999).compareTo(b.rank ?? 999999));
       case PersonalDjMood.mixed:
@@ -395,11 +433,44 @@ class PersonalDjService {
     required Set<int> recentIds,
     required bool strict,
   }) {
+    if (mood == PersonalDjMood.chill) {
+      return _chillCandidates(tracks, minScore: personalDjChillMinScore);
+    }
+
     final passing = tracks
         .where((t) => _trackFitsMood(t, mood, likedIds: likedIds, recentIds: recentIds))
         .toList();
     if (!strict || passing.length >= 4) return passing;
     return tracks;
+  }
+
+  List<DeezerTrack> _chillCandidates(
+    List<DeezerTrack> tracks, {
+    double minScore = personalDjChillMinScore,
+  }) {
+    final passing = tracks.where((t) => chillScore(t) >= minScore).toList()
+      ..sort((a, b) => chillScore(b).compareTo(chillScore(a)));
+    if (passing.isNotEmpty) return passing;
+
+    final relaxed = tracks.where((t) => chillScore(t) >= minScore - 0.12).toList()
+      ..sort((a, b) => chillScore(b).compareTo(chillScore(a)));
+    return relaxed;
+  }
+
+  /// Heuristic chill fit from duration and chart rank (higher = mellower).
+  static double chillScore(DeezerTrack track) {
+    final duration = track.duration ?? 0;
+    if (duration < personalDjChillMinDuration) return -1;
+
+    final rank = track.rank ?? 220000;
+    if (rank >= personalDjChillMaxRank) return -1;
+
+    final durationScore =
+        1.0 - ((duration - 285) / 210).abs().clamp(0.0, 1.0);
+    final rankScore =
+        ((personalDjChillMaxRank - rank) / personalDjChillMaxRank).clamp(0.0, 1.0);
+
+    return durationScore * 0.3 + rankScore * 0.7;
   }
 
   bool _trackFitsMood(
@@ -412,7 +483,7 @@ class PersonalDjService {
     final rank = track.rank ?? 0;
 
     return switch (mood) {
-      PersonalDjMood.chill => duration >= 150 || rank < 500000,
+      PersonalDjMood.chill => chillScore(track) >= personalDjChillMinScore,
       PersonalDjMood.hype => rank >= 250000 || duration <= 240,
       PersonalDjMood.discover =>
         !likedIds.contains(track.id) && !recentIds.contains(track.id),
@@ -430,7 +501,7 @@ class PersonalDjService {
     final rank = (track.rank ?? 400000).toDouble();
 
     return switch (mood) {
-      PersonalDjMood.chill => duration / 60 + (rank < 500000 ? 1.0 : 0.0),
+      PersonalDjMood.chill => chillScore(track),
       PersonalDjMood.hype => rank / 100000 + duration.clamp(120, 300) / 300,
       PersonalDjMood.discover =>
         (likedIds.contains(track.id) ? -5.0 : 2.0) +
@@ -447,8 +518,8 @@ class PersonalDjService {
       case PersonalDjMood.mixed:
         tail.shuffle(_rng);
       case PersonalDjMood.chill:
-        tail.sort((a, b) => (b.duration ?? 0).compareTo(a.duration ?? 0));
-        _shuffleWithinChunks(tail, chunkSize: 5);
+        tail.sort((a, b) => chillScore(b).compareTo(chillScore(a)));
+        _shuffleWithinChunks(tail, chunkSize: 3);
       case PersonalDjMood.hype:
         tail.sort((a, b) => (b.rank ?? 0).compareTo(a.rank ?? 0));
         _shuffleWithinChunks(tail, chunkSize: 4);
@@ -499,7 +570,7 @@ class PersonalDjService {
         PersonalDjMood.mixed =>
           'Balanced mix of favorites, recent plays, and similar tracks.',
         PersonalDjMood.chill =>
-          'Longer, mellower tracks — fewer fresh hits, more flow.',
+          'Deeper cuts and longer tracks — skips chart bangers and short singles.',
         PersonalDjMood.hype =>
           'High-energy favorites and chart-rising picks.',
         PersonalDjMood.discover =>
