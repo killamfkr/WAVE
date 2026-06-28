@@ -165,7 +165,7 @@ class _StartDjViewState extends State<_StartDjView> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _MoodChips(
+                _MoodPicker(
                   theme: theme,
                   selected: _mood,
                   onSelected: (m) => setState(() => _mood = m),
@@ -323,7 +323,7 @@ class _ActiveDjView extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 10),
-                _MoodChips(
+                _MoodPicker(
                   theme: theme,
                   selected: dj.mood,
                   onSelected: onMood,
@@ -597,8 +597,8 @@ class _VoiceToggle extends ConsumerWidget {
   }
 }
 
-class _MoodChips extends StatelessWidget {
-  const _MoodChips({
+class _MoodPicker extends StatelessWidget {
+  const _MoodPicker({
     required this.theme,
     required this.selected,
     required this.onSelected,
@@ -610,41 +610,57 @@ class _MoodChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: PersonalDjMood.values.map((mood) {
-        final isSelected = mood == selected;
-        return GestureDetector(
-          onTap: () => onSelected(mood),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? theme.accent.withValues(alpha: 0.18)
-                  : theme.surface,
-              borderRadius: BorderRadius.circular(
-                theme.cardRadius == 0 ? 0 : 20,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: PersonalDjMood.values.map((mood) {
+            final isSelected = mood == selected;
+            return GestureDetector(
+              onTap: () => onSelected(mood),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? theme.accent.withValues(alpha: 0.18)
+                      : theme.surface,
+                  borderRadius: BorderRadius.circular(
+                    theme.cardRadius == 0 ? 0 : 20,
+                  ),
+                  border: Border.all(
+                    color: isSelected
+                        ? theme.accent
+                        : theme.onSurface.withValues(alpha: 0.08),
+                    width: isSelected ? 1.5 : 1,
+                  ),
+                ),
+                child: Text(
+                  PersonalDjService.moodLabel(mood),
+                  style: TextStyle(
+                    color: isSelected ? theme.accent : theme.onSurface,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-              border: Border.all(
-                color: isSelected
-                    ? theme.accent
-                    : theme.onSurface.withValues(alpha: 0.08),
-                width: isSelected ? 1.5 : 1,
-              ),
-            ),
-            child: Text(
-              PersonalDjService.moodLabel(mood),
-              style: TextStyle(
-                color: isSelected ? theme.accent : theme.onSurface,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          PersonalDjService.moodDescription(selected),
+          style: TextStyle(
+            color: theme.onSurfaceMuted,
+            fontSize: 12,
+            height: 1.4,
+            fontWeight: FontWeight.w500,
           ),
-        );
-      }).toList(),
+        ),
+      ],
     );
   }
 }

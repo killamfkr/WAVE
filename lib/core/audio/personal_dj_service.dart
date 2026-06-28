@@ -50,17 +50,29 @@ class PersonalDjService {
     PersonalDjMood mood = PersonalDjMood.mixed,
   }) async {
     final likedIds = liked.map((t) => t.id).toSet();
-    final seeds = await _pickSeeds(liked: liked, recent: recent, count: 6);
-    final seed = seeds.first;
+    final recentIds = _recentTrackIds(recent);
+    final seeds = await _pickSeeds(
+      liked: liked,
+      recent: recent,
+      count: 6,
+      mood: mood,
+      likedIds: likedIds,
+      recentIds: recentIds,
+    );
+    final seed = _pickOpenerSeed(seeds, mood, likedIds, recentIds);
+    final orderedSeeds = <DeezerTrack>[seed, ...seeds.where((t) => t.id != seed.id)];
     final exclude = <int>{seed.id};
     final tail = <DeezerTrack>[];
 
     await _appendFromSeeds(
-      seeds: seeds,
+      seeds: orderedSeeds,
       exclude: exclude,
       into: tail,
       target: personalDjQueueTarget - 1,
       similarPerSeed: 12,
+      mood: mood,
+      likedIds: likedIds,
+      recentIds: recentIds,
     );
 
     await _appendLikedAndRecent(
@@ -69,19 +81,19 @@ class PersonalDjService {
       exclude: exclude,
       into: tail,
       target: personalDjQueueTarget - 1,
+      mood: mood,
+      likedIds: likedIds,
+      recentIds: recentIds,
     );
 
-    _applyMoodSort(tail, mood);
-    if (tail.length > 1) {
-      tail.shuffle(_rng);
-    }
+    _finalizeTailOrder(tail, mood);
 
     final queue = <DeezerTrack>[seed, ...tail];
 
     final openerSpoken = PersonalDjSpeech.opener(
       seed: seed,
       fromLiked: likedIds.contains(seed.id),
-      fromRecent: recent.any((e) => e.kind == 'track' && e.id == seed.id),
+      fromRecent: recentIds.contains(seed.id),
       mood: mood,
     );
 
@@ -102,6 +114,8 @@ class PersonalDjService {
     PersonalDjMood mood = PersonalDjMood.mixed,
     int target = personalDjRefillBatch,
   }) async {
+    final likedIds = liked.map((t) => t.id).toSet();
+    final recentIds = _recentTrackIds(recent);
     final exclude = <int>{...excludeIds};
     final added = <DeezerTrack>[];
 
@@ -110,6 +124,9 @@ class PersonalDjService {
       recent: recent,
       count: 4,
       excludeIds: exclude,
+      mood: mood,
+      likedIds: likedIds,
+      recentIds: recentIds,
     );
 
     await _appendFromSeeds(
@@ -118,6 +135,9 @@ class PersonalDjService {
       into: added,
       target: target,
       similarPerSeed: 10,
+      mood: mood,
+      likedIds: likedIds,
+      recentIds: recentIds,
     );
 
     await _appendLikedAndRecent(
@@ -126,12 +146,12 @@ class PersonalDjService {
       exclude: exclude,
       into: added,
       target: target,
+      mood: mood,
+      likedIds: likedIds,
+      recentIds: recentIds,
     );
 
-    _applyMoodSort(added, mood);
-    if (added.length > 1) {
-      added.shuffle(_rng);
-    }
+    _finalizeTailOrder(added, mood);
 
     return added.take(target).toList(growable: false);
   }
@@ -142,6 +162,9 @@ class PersonalDjService {
     required List<DeezerTrack> into,
     required int target,
     required int similarPerSeed,
+    required PersonalDjMood mood,
+    required Set<int> likedIds,
+    required Set<int> recentIds,
   }) async {
     for (final seed in seeds) {
       if (into.length >= target) return;
@@ -149,13 +172,26 @@ class PersonalDjService {
       final similar = await _similar.resolve(
         seed,
         excludeIds: exclude,
-        limit: similarPerSeed,
+        limit: similarPerSeed + 6,
       );
-      for (final track in similar) {
+      final filtered = _filterForMood(
+        similar,
+        mood,
+        likedIds: likedIds,
+        recentIds: recentIds,
+        strict: true,
+      );
+      final candidates = filtered.isEmpty
+          ? similar
+          : filtered.length >= 4
+              ? filtered
+              : <DeezerTrack>[...filtered, ...similar.where((t) => !filtered.contains(t))];
+
+      for (final track in candidates) {
+        if (into.length >= target) return;
         if (exclude.add(track.id)) {
           into.add(track);
         }
-        if (into.length >= target) return;
       }
     }
   }
@@ -166,19 +202,51 @@ class PersonalDjService {
     required Set<int> exclude,
     required List<DeezerTrack> into,
     required int target,
+    required PersonalDjMood mood,
+    required Set<int> likedIds,
+    required Set<int> recentIds,
   }) async {
-    final likedPool = List<DeezerTrack>.from(liked)..shuffle(_rng);
-    for (final track in likedPool) {
+    switch (mood) {
+      case PersonalDjMood.discover:
+        return;
+      case PersonalDjMood.mixed:
+      case PersonalDjMood.chill:
+      case PersonalDjMood.hype:
+        break;
+    }
+
+    final likedCap = switch (mood) {
+      PersonalDjMood.chill => 18,
+      PersonalDjMood.hype => 22,
+      PersonalDjMood.mixed => 20,
+      PersonalDjMood.discover => 0,
+    };
+
+    final likedPool = _rankLikedForMood(liked, mood);
+    for (final track in likedPool.take(likedCap)) {
       if (into.length >= target) return;
+      if (!_trackFitsMood(track, mood, likedIds: likedIds, recentIds: recentIds)) {
+        continue;
+      }
       if (exclude.add(track.id)) {
         into.add(track);
       }
     }
 
-    for (final entry in recent.where((e) => e.kind == 'track').take(16)) {
+    final recentCap = switch (mood) {
+      PersonalDjMood.chill => 6,
+      PersonalDjMood.hype => 10,
+      PersonalDjMood.mixed => 12,
+      PersonalDjMood.discover => 0,
+    };
+
+    for (final entry in recent.where((e) => e.kind == 'track').take(recentCap)) {
       if (into.length >= target) return;
       try {
         final track = await _deezer.getTrack(entry.id);
+        if (!_trackFitsMood(track, mood, likedIds: likedIds, recentIds: recentIds)) {
+          continue;
+        }
         if (exclude.add(track.id)) {
           into.add(track);
         }
@@ -192,7 +260,10 @@ class PersonalDjService {
     required List<DeezerTrack> liked,
     required List<RecentEntry> recent,
     required int count,
+    PersonalDjMood mood = PersonalDjMood.mixed,
     Set<int> excludeIds = const <int>{},
+    Set<int> likedIds = const <int>{},
+    Set<int> recentIds = const <int>{},
   }) async {
     final seeds = <DeezerTrack>[];
     final seen = <int>{...excludeIds};
@@ -203,14 +274,48 @@ class PersonalDjService {
       }
     }
 
-    final likedPool = List<DeezerTrack>.from(liked)..shuffle(_rng);
-    for (final track in likedPool) {
-      tryAdd(track);
-      if (seeds.length >= count) return seeds;
+    switch (mood) {
+      case PersonalDjMood.discover:
+        for (final entry in recent.where((e) => e.kind == 'track')) {
+          if (seeds.length >= count) break;
+          if (likedIds.contains(entry.id)) continue;
+          try {
+            tryAdd(await _deezer.getTrack(entry.id));
+          } catch (e) {
+            appLogger.w('DJ seed: could not load recent track ${entry.id}: $e');
+          }
+        }
+        final deepLiked = List<DeezerTrack>.from(liked)
+          ..sort((a, b) => (a.rank ?? 999999).compareTo(b.rank ?? 999999));
+        for (final track in deepLiked) {
+          tryAdd(track);
+          if (seeds.length >= count) return seeds;
+        }
+      case PersonalDjMood.hype:
+        final hypePool = List<DeezerTrack>.from(liked)
+          ..sort((a, b) => (b.rank ?? 0).compareTo(a.rank ?? 0));
+        for (final track in hypePool) {
+          tryAdd(track);
+          if (seeds.length >= count) return seeds;
+        }
+      case PersonalDjMood.chill:
+        final chillPool = List<DeezerTrack>.from(liked)
+          ..sort((a, b) => (b.duration ?? 0).compareTo(a.duration ?? 0));
+        for (final track in chillPool) {
+          tryAdd(track);
+          if (seeds.length >= count) return seeds;
+        }
+      case PersonalDjMood.mixed:
+        final mixedPool = List<DeezerTrack>.from(liked)..shuffle(_rng);
+        for (final track in mixedPool) {
+          tryAdd(track);
+          if (seeds.length >= count) return seeds;
+        }
     }
 
     for (final entry in recent.where((e) => e.kind == 'track')) {
       if (seeds.length >= count) break;
+      if (mood == PersonalDjMood.discover && likedIds.contains(entry.id)) continue;
       try {
         tryAdd(await _deezer.getTrack(entry.id));
       } catch (e) {
@@ -218,12 +323,16 @@ class PersonalDjService {
       }
     }
 
-    if (seeds.isEmpty) {
-      final chart = await _deezer.getChartTracks(limit: 20);
-      final chartPool = List<DeezerTrack>.from(chart)..shuffle(_rng);
-      for (final track in chartPool) {
-        tryAdd(track);
-        if (seeds.length >= count) break;
+    if (seeds.length < count) {
+      try {
+        final chart = await _deezer.getChartTracks(limit: 30);
+        final chartPool = _rankChartForMood(chart, mood)..shuffle(_rng);
+        for (final track in chartPool) {
+          tryAdd(track);
+          if (seeds.length >= count) break;
+        }
+      } catch (e) {
+        appLogger.w('DJ seed: chart fallback failed: $e');
       }
     }
 
@@ -234,20 +343,138 @@ class PersonalDjService {
     return seeds;
   }
 
-  void _applyMoodSort(
-    List<DeezerTrack> tail,
+  DeezerTrack _pickOpenerSeed(
+    List<DeezerTrack> seeds,
     PersonalDjMood mood,
+    Set<int> likedIds,
+    Set<int> recentIds,
   ) {
+    if (seeds.isEmpty) {
+      throw StateError('No seeds available for DJ opener.');
+    }
+    final ranked = List<DeezerTrack>.from(seeds)
+      ..sort((a, b) => _moodScore(b, mood, likedIds, recentIds)
+          .compareTo(_moodScore(a, mood, likedIds, recentIds)));
+    return ranked.first;
+  }
+
+  List<DeezerTrack> _rankLikedForMood(List<DeezerTrack> liked, PersonalDjMood mood) {
+    final pool = List<DeezerTrack>.from(liked);
     switch (mood) {
       case PersonalDjMood.chill:
-        tail.sort((a, b) => (b.duration ?? 0).compareTo(a.duration ?? 0));
+        pool.sort((a, b) => (b.duration ?? 0).compareTo(a.duration ?? 0));
       case PersonalDjMood.hype:
-        tail.sort((a, b) => (b.rank ?? 0).compareTo(a.rank ?? 0));
+        pool.sort((a, b) => (b.rank ?? 0).compareTo(a.rank ?? 0));
       case PersonalDjMood.discover:
+        pool.sort((a, b) => (a.rank ?? 999999).compareTo(b.rank ?? 999999));
+      case PersonalDjMood.mixed:
+        pool.shuffle(_rng);
+    }
+    return pool;
+  }
+
+  List<DeezerTrack> _rankChartForMood(List<DeezerTrack> chart, PersonalDjMood mood) {
+    final pool = List<DeezerTrack>.from(chart);
+    switch (mood) {
+      case PersonalDjMood.hype:
+        pool.sort((a, b) => (b.rank ?? 0).compareTo(a.rank ?? 0));
+      case PersonalDjMood.chill:
+        pool.sort((a, b) => (b.duration ?? 0).compareTo(a.duration ?? 0));
+      case PersonalDjMood.discover:
+        pool.sort((a, b) => (a.rank ?? 999999).compareTo(b.rank ?? 999999));
       case PersonalDjMood.mixed:
         break;
     }
+    return pool;
   }
+
+  List<DeezerTrack> _filterForMood(
+    List<DeezerTrack> tracks,
+    PersonalDjMood mood, {
+    required Set<int> likedIds,
+    required Set<int> recentIds,
+    required bool strict,
+  }) {
+    final passing = tracks
+        .where((t) => _trackFitsMood(t, mood, likedIds: likedIds, recentIds: recentIds))
+        .toList();
+    if (!strict || passing.length >= 4) return passing;
+    return tracks;
+  }
+
+  bool _trackFitsMood(
+    DeezerTrack track,
+    PersonalDjMood mood, {
+    required Set<int> likedIds,
+    required Set<int> recentIds,
+  }) {
+    final duration = track.duration ?? 0;
+    final rank = track.rank ?? 0;
+
+    return switch (mood) {
+      PersonalDjMood.chill => duration >= 150 || rank < 500000,
+      PersonalDjMood.hype => rank >= 250000 || duration <= 240,
+      PersonalDjMood.discover =>
+        !likedIds.contains(track.id) && !recentIds.contains(track.id),
+      PersonalDjMood.mixed => true,
+    };
+  }
+
+  double _moodScore(
+    DeezerTrack track,
+    PersonalDjMood mood,
+    Set<int> likedIds,
+    Set<int> recentIds,
+  ) {
+    final duration = (track.duration ?? 180).toDouble();
+    final rank = (track.rank ?? 400000).toDouble();
+
+    return switch (mood) {
+      PersonalDjMood.chill => duration / 60 + (rank < 500000 ? 1.0 : 0.0),
+      PersonalDjMood.hype => rank / 100000 + duration.clamp(120, 300) / 300,
+      PersonalDjMood.discover =>
+        (likedIds.contains(track.id) ? -5.0 : 2.0) +
+            (recentIds.contains(track.id) ? -3.0 : 1.0) +
+            (700000 - rank).clamp(0, 700000) / 200000,
+      PersonalDjMood.mixed => _rng.nextDouble(),
+    };
+  }
+
+  void _finalizeTailOrder(List<DeezerTrack> tail, PersonalDjMood mood) {
+    if (tail.length <= 1) return;
+
+    switch (mood) {
+      case PersonalDjMood.mixed:
+        tail.shuffle(_rng);
+      case PersonalDjMood.chill:
+        tail.sort((a, b) => (b.duration ?? 0).compareTo(a.duration ?? 0));
+        _shuffleWithinChunks(tail, chunkSize: 5);
+      case PersonalDjMood.hype:
+        tail.sort((a, b) => (b.rank ?? 0).compareTo(a.rank ?? 0));
+        _shuffleWithinChunks(tail, chunkSize: 4);
+      case PersonalDjMood.discover:
+        tail.sort(
+          (a, b) => (a.rank ?? 999999).compareTo(b.rank ?? 999999),
+        );
+        _shuffleWithinChunks(tail, chunkSize: 3);
+    }
+  }
+
+  void _shuffleWithinChunks(List<DeezerTrack> tracks, {required int chunkSize}) {
+    if (chunkSize < 2) return;
+    for (var i = 0; i < tracks.length; i += chunkSize) {
+      final end = min(i + chunkSize, tracks.length);
+      final chunk = tracks.sublist(i, end)..shuffle(_rng);
+      for (var j = 0; j < chunk.length; j++) {
+        tracks[i + j] = chunk[j];
+      }
+    }
+  }
+
+  Set<int> _recentTrackIds(List<RecentEntry> recent) => recent
+      .where((e) => e.kind == 'track')
+      .map((e) => e.id)
+      .toSet();
 
   static String linerFor(
     DeezerTrack track, {
@@ -266,5 +493,16 @@ class PersonalDjService {
         PersonalDjMood.chill => 'Chill',
         PersonalDjMood.hype => 'Hype',
         PersonalDjMood.discover => 'Discover',
+      };
+
+  static String moodDescription(PersonalDjMood mood) => switch (mood) {
+        PersonalDjMood.mixed =>
+          'Balanced mix of favorites, recent plays, and similar tracks.',
+        PersonalDjMood.chill =>
+          'Longer, mellower tracks — fewer fresh hits, more flow.',
+        PersonalDjMood.hype =>
+          'High-energy favorites and chart-rising picks.',
+        PersonalDjMood.discover =>
+          'New-to-you tracks — skips your likes and recent plays.',
       };
 }
