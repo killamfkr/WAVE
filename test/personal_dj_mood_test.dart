@@ -71,4 +71,28 @@ void main() {
       expect(fast, lessThan(0));
     });
   });
+
+  group('hypeScore', () {
+    test('rejects slow tracks when BPM is known', () {
+      expect(
+        PersonalDjService.hypeScore(
+          _track(id: 10, duration: 200, rank: 700000, bpm: 82),
+        ),
+        lessThan(0),
+      );
+    });
+
+    test('prefers faster chart tracks over slow deep cuts', () {
+      final fastHit = PersonalDjService.hypeScore(
+        _track(id: 11, duration: 210, rank: 750000, bpm: 132),
+      );
+      final slowCut = PersonalDjService.hypeScore(
+        _track(id: 12, duration: 320, rank: 120000, bpm: 88),
+      );
+
+      expect(fastHit, greaterThan(personalDjHypeMinScore));
+      expect(slowCut, lessThan(0));
+      expect(fastHit, greaterThan(slowCut));
+    });
+  });
 }
