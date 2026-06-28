@@ -212,8 +212,14 @@ class PersonalDjService {
       List<DeezerTrack> candidates;
       if (mood == PersonalDjMood.chill) {
         candidates = await _filterChillTracks(similar);
+        if (candidates.isEmpty) {
+          candidates = _chillCandidates(similar, minScore: personalDjChillMinScore - 0.2);
+        }
       } else if (mood == PersonalDjMood.hype) {
         candidates = await _filterHypeTracks(similar);
+        if (candidates.isEmpty) {
+          candidates = _hypeCandidates(similar, minScore: personalDjHypeMinScore - 0.2);
+        }
       } else {
         final filtered = _filterForMood(
           similar,
@@ -342,13 +348,13 @@ class PersonalDjService {
           if (seeds.length >= count) return seeds;
         }
       case PersonalDjMood.hype:
-        final hypePool = await _filterHypeTracks(liked);
+        final hypePool = await _filterHypeTracks(liked.take(30).toList());
         for (final track in hypePool) {
           tryAdd(track);
           if (seeds.length >= count) return _enrichBpm(seeds);
         }
       case PersonalDjMood.chill:
-        final chillPool = await _filterChillTracks(liked);
+        final chillPool = await _filterChillTracks(liked.take(30).toList());
         for (final track in chillPool) {
           tryAdd(track);
           if (seeds.length >= count) return _enrichBpm(seeds);
@@ -389,8 +395,16 @@ class PersonalDjService {
         var chartPool = _rankChartForMood(chart, mood);
         if (mood == PersonalDjMood.chill) {
           chartPool = await _filterChillTracks(chartPool);
+          if (chartPool.isEmpty) {
+            chartPool = List<DeezerTrack>.from(chart)
+              ..sort((a, b) => chillScore(b).compareTo(chillScore(a)));
+          }
         } else if (mood == PersonalDjMood.hype) {
           chartPool = await _filterHypeTracks(chartPool);
+          if (chartPool.isEmpty) {
+            chartPool = List<DeezerTrack>.from(chart)
+              ..sort((a, b) => hypeScore(b).compareTo(hypeScore(a)));
+          }
         } else {
           chartPool.shuffle(_rng);
         }
@@ -404,6 +418,16 @@ class PersonalDjService {
     }
 
     if (seeds.isEmpty) {
+      await _fillEmergencySeeds(
+        seeds: seeds,
+        count: count,
+        liked: liked,
+        recent: recent,
+        seen: seen,
+      );
+    }
+
+    if (seeds.isEmpty) {
       throw StateError('Could not build a DJ session — no tracks available.');
     }
 
@@ -414,28 +438,74 @@ class PersonalDjService {
     return seeds;
   }
 
+  Future<void> _fillEmergencySeeds({
+    required List<DeezerTrack> seeds,
+    required int count,
+    required List<DeezerTrack> liked,
+    required List<RecentEntry> recent,
+    required Set<int> seen,
+  }) async {
+    if (seeds.isNotEmpty) return;
+
+    void tryAdd(DeezerTrack track) {
+      if (seen.add(track.id)) {
+        seeds.add(track);
+      }
+    }
+
+    appLogger.w('DJ seeds: mood filters returned nothing — using emergency fallback.');
+
+    for (final track in liked) {
+      tryAdd(track);
+      if (seeds.length >= count) return;
+    }
+
+    for (final entry in recent.where((e) => e.kind == 'track')) {
+      if (seeds.length >= count) break;
+      try {
+        tryAdd(await _deezer.getTrack(entry.id));
+      } catch (e) {
+        appLogger.w('DJ emergency seed: could not load recent track ${entry.id}: $e');
+      }
+    }
+
+    if (seeds.length >= count) return;
+
+    try {
+      final chart = await _deezer.getChartTracks(limit: 30);
+      for (final track in chart) {
+        tryAdd(track);
+        if (seeds.length >= count) break;
+      }
+    } catch (e) {
+      appLogger.w('DJ emergency seed: chart fallback failed: $e');
+    }
+  }
+
   Future<void> _refineMoodTail(List<DeezerTrack> tail, PersonalDjMood mood) async {
     if (tail.isEmpty) return;
 
     switch (mood) {
       case PersonalDjMood.chill:
         final enriched = await _enrichBpm(tail);
-        tail
-          ..clear()
-          ..addAll(
-            enriched.where(
-              (t) => chillScore(t) >= personalDjChillMinScore - 0.08,
-            ),
-          );
+        final refined = enriched
+            .where((t) => chillScore(t) >= personalDjChillMinScore - 0.08)
+            .toList();
+        if (refined.isNotEmpty) {
+          tail
+            ..clear()
+            ..addAll(refined);
+        }
       case PersonalDjMood.hype:
         final enriched = await _enrichBpm(tail);
-        tail
-          ..clear()
-          ..addAll(
-            enriched.where(
-              (t) => hypeScore(t) >= personalDjHypeMinScore - 0.08,
-            ),
-          );
+        final refined = enriched
+            .where((t) => hypeScore(t) >= personalDjHypeMinScore - 0.08)
+            .toList();
+        if (refined.isNotEmpty) {
+          tail
+            ..clear()
+            ..addAll(refined);
+        }
       case PersonalDjMood.mixed:
       case PersonalDjMood.discover:
         break;
@@ -522,7 +592,11 @@ class PersonalDjService {
 
     final relaxed = tracks.where((t) => chillScore(t) >= minScore - 0.12).toList()
       ..sort((a, b) => chillScore(b).compareTo(chillScore(a)));
-    return relaxed;
+    if (relaxed.isNotEmpty) return relaxed;
+
+    final salvage = tracks.where((t) => chillScore(t) >= 0).toList()
+      ..sort((a, b) => chillScore(b).compareTo(chillScore(a)));
+    return salvage;
   }
 
   Future<List<DeezerTrack>> _filterChillTracks(
@@ -543,7 +617,11 @@ class PersonalDjService {
 
     final relaxed = tracks.where((t) => hypeScore(t) >= minScore - 0.12).toList()
       ..sort((a, b) => hypeScore(b).compareTo(hypeScore(a)));
-    return relaxed;
+    if (relaxed.isNotEmpty) return relaxed;
+
+    final salvage = tracks.where((t) => hypeScore(t) >= 0).toList()
+      ..sort((a, b) => hypeScore(b).compareTo(hypeScore(a)));
+    return salvage;
   }
 
   Future<List<DeezerTrack>> _filterHypeTracks(

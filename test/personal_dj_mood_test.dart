@@ -95,4 +95,13 @@ void main() {
       expect(fastHit, greaterThan(slowCut));
     });
   });
+
+  group('mood salvage', () {
+    test('chart hits can still rank for hype without hard-failing', () {
+      final chartHit = PersonalDjService.hypeScore(
+        _track(id: 13, duration: 210, rank: 750000),
+      );
+      expect(chartHit, greaterThanOrEqualTo(0));
+    });
+  });
 }

@@ -5,6 +5,7 @@ import '../api/models/player_state.dart';
 import '../storage/library_providers.dart';
 import '../storage/recently_played.dart';
 import '../storage/settings_providers.dart';
+import '../utils/app_logger.dart';
 import 'dj_tts/dj_tts_config.dart';
 import 'dj_tts/dj_tts_key_store.dart';
 import 'music_player_service.dart';
@@ -109,10 +110,17 @@ class PersonalDjNotifier extends Notifier<PersonalDjState> {
         await _player.play();
       }
       return true;
-    } catch (e) {
+    } catch (e, st) {
+      appLogger.e('DJ session start failed', error: e, stackTrace: st);
+      final liked = ref.read(likedTracksProvider);
+      final recent = ref.read(recentlyPlayedProvider);
+      final message = liked.isEmpty &&
+              recent.where((e) => e.kind == 'track').isEmpty
+          ? 'Like some songs or play a few tracks first.'
+          : 'Could not start your DJ session. Try again.';
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'Could not start your DJ session. Try again.',
+        errorMessage: message,
       );
       return false;
     }
