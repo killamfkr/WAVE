@@ -2,7 +2,7 @@
   <img src="icon.png" width="128" height="128" alt="WAVE App Icon" />
   <h1>WAVE</h1>
   <p>A fast, cross-platform music streaming app built with Flutter.</p>
-  <p><strong>Latest release:</strong> <a href="https://github.com/killamfkr/WAVE/releases/latest">v1.2.3</a></p>
+  <p><strong>Latest release:</strong> <a href="https://github.com/killamfkr/WAVE/releases/latest">v1.2.4</a></p>
 </div>
 
 ---
@@ -47,6 +47,7 @@ WAVE is a modern music client for streaming, library management, and personalize
 
 | Version | Highlights |
 |---------|------------|
+| **1.2.4** | BPM-aware Chill & Hype — slower vs faster tempos from Deezer track data |
 | **1.2.3** | Personal DJ moods shape the mix — chill, hype, and discover change track selection |
 | **1.2.2** | Personal DJ larger queue — multi-seed mixes, auto-refill, less repetition |
 | **1.2.1** | DJ first song matches opener; deeper baritone voice |
