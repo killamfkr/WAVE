@@ -14,6 +14,7 @@ _DeezerTrack _$DeezerTrackFromJson(Map<String, dynamic> json) => _DeezerTrack(
   link: json['link'] as String?,
   duration: (json['duration'] as num?)?.toInt(),
   rank: (json['rank'] as num?)?.toInt(),
+  bpm: (json['bpm'] as num?)?.toDouble(),
   explicitLyrics: boolFromJson(json['explicit_lyrics']),
   preview: json['preview'] as String?,
   artist: json['artist'] == null
@@ -33,6 +34,7 @@ Map<String, dynamic> _$DeezerTrackToJson(_DeezerTrack instance) =>
       'link': instance.link,
       'duration': instance.duration,
       'rank': instance.rank,
+      'bpm': instance.bpm,
       'explicit_lyrics': boolToJson(instance.explicitLyrics),
       'preview': instance.preview,
       'artist': instance.artist,
